@@ -145,7 +145,7 @@ function spawnEnemy() {
 // slide boost on crouch, per-axis max speed (lets you air-strafe past it), bhop by holding jump.
 const MOVE = 90, MAXSPEED = 20, COUNTER = 0.175, THRESH = 0.01, SLIDE_BOOST = 8, SLIDE_COUNTER = 0.2;
 const GRAV = 30, JUMP_V = 11, JUMP_CD = 0.25, R = 0.4, DT = 0.02;
-const pl = { pos: start.clone(), prev: start.clone(), vel: new THREE.Vector3(), grounded: false, gTimer: 0, readyJump: true, jumpCd: 0, crouch: false, eye: 1.6 };
+const pl = { pos: start.clone(), prev: start.clone(), vel: new THREE.Vector3(), grounded: false, gTimer: 0, readyJump: true, jumpCd: 0, crouch: false, eye: 1.6, dip: 0 };
 const keys = {}, stick = { x: 0, y: 0 }, tbtn = { jump: false, slide: false };
 let hp = 100, kills = 0, alive = true, spawnTimer = 0, elapsed = 0, cooldown = 0, acc = 0;
 const msg = document.getElementById('msg'), hud = document.getElementById('hud'), flash = document.getElementById('flash');
@@ -154,7 +154,7 @@ const footTiles = (x, z, f) => { // run f(i,j) over tiles under the player's foo
   for (let i = Math.floor((z - R) / T); i <= Math.floor((z + R) / T); i++)
     for (let j = Math.floor((x - R) / T); j <= Math.floor((x + R) / T); j++) f(i, j);
 };
-const blockedAt = (x, y, z) => { let b = false; footTiles(x, z, (i, j) => { if (top(i, j) > y + 0.01) b = true; }); return b; };
+const blockedAt = (x, y, z) => { let b = false; footTiles(x, z, (i, j) => { if (top(i, j) > y + 0.3) b = true; /* step up small ledges */ }); return b; };
 
 function setCrouch(c) {
   if (c === pl.crouch) return;
@@ -169,7 +169,7 @@ function step() { // one fixed 50Hz physics tick
   const fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw);
   let x = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0) + stick.x;
   let y = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0) - stick.y;
-  x = Math.max(-1, Math.min(1, x)); y = Math.max(-1, Math.min(1, y));
+  const im = Math.hypot(x, y); if (im > 1) { x /= im; y /= im; } // no faster diagonals
   const jumping = keys.Space || tbtn.jump;
   setCrouch(!!(keys.ControlLeft || keys.KeyC || keys.ShiftLeft || tbtn.slide));
   pl.gTimer -= DT; pl.grounded = pl.gTimer > 0;
@@ -209,7 +209,7 @@ function step() { // one fixed 50Hz physics tick
   p.z += v.z * DT; if (blockedAt(p.x, p.y, p.z)) { p.z -= v.z * DT; v.z = 0; }
   p.y += v.y * DT;
   let gh = 0, ceil = 99; footTiles(p.x, p.z, (i, j) => { gh = Math.max(gh, top(i, j) <= p.y + 0.3 ? top(i, j) : 0); if (roofed(i, j)) ceil = ROOF; });
-  if (p.y <= gh) { p.y = gh; if (v.y < 0) v.y = 0; pl.grounded = true; pl.gTimer = 0.06; }
+  if (p.y <= gh) { p.y = gh; if (v.y < -6) pl.dip = Math.min(0.35, -v.y * 0.02); if (v.y < 0) v.y = 0; pl.grounded = true; pl.gTimer = 0.1; } // 0.1s coyote time
   if (p.y + h > ceil) { p.y = ceil - h; if (v.y > 0) v.y = 0; }
 }
 
@@ -218,9 +218,10 @@ const isTouch = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in wind
 let touchPlaying = false;
 if (isTouch) document.body.classList.add('touch');
 msg.onclick = () => {
-  if (!alive) location.reload();
-  else if (isTouch) { touchPlaying = true; msg.style.display = 'none'; }
-  else renderer.domElement.requestPointerLock();
+  if (!alive) return location.reload();
+  document.documentElement.requestFullscreen?.().catch(() => {});
+  if (isTouch) { touchPlaying = true; msg.style.display = 'none'; }
+  else renderer.domElement.requestPointerLock({ unadjustedMovement: true })?.catch?.(() => renderer.domElement.requestPointerLock()); // raw mouse, no OS accel/jitter
 };
 document.addEventListener('pointerlockchange', () => msg.style.display = document.pointerLockElement ? 'none' : 'flex');
 const playing = () => document.pointerLockElement || touchPlaying;
@@ -310,7 +311,10 @@ renderer.setAnimationLoop(() => {
   // camera: interpolate between physics ticks, lower eye when sliding, FOV widens with speed
   const k = acc / DT, speed = Math.hypot(pl.vel.x, pl.vel.z);
   pl.eye += ((pl.crouch ? 0.9 : 1.6) - pl.eye) * Math.min(1, dt * 15);
-  cam.position.set(pl.prev.x + (pl.pos.x - pl.prev.x) * k, pl.prev.y + (pl.pos.y - pl.prev.y) * k + pl.eye, pl.prev.z + (pl.pos.z - pl.prev.z) * k);
+  pl.dip *= Math.max(0, 1 - dt * 10); // landing dip recovers
+  cam.position.set(pl.prev.x + (pl.pos.x - pl.prev.x) * k, pl.prev.y + (pl.pos.y - pl.prev.y) * k + pl.eye - pl.dip, pl.prev.z + (pl.pos.z - pl.prev.z) * k);
+  const side = pl.vel.x * Math.cos(cam.rotation.y) - pl.vel.z * Math.sin(cam.rotation.y); // strafe lean
+  cam.rotation.z += (-side * 0.003 - cam.rotation.z) * Math.min(1, dt * 10);
   const fov = 75 + Math.min(speed, 25) * 0.6;
   if (Math.abs(cam.fov - fov) > 0.1) { cam.fov += (fov - cam.fov) * Math.min(1, dt * 8); cam.updateProjectionMatrix(); }
   muzzle.intensity *= 0.8; gun.position.z += (-0.35 - gun.position.z) * 0.2;
