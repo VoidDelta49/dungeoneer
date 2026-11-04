@@ -35,7 +35,7 @@ import * as THREE from 'three';
 
 // ---- Cache busting: bump VERSION on every release. On load we refetch this page uncached;
 // if the live copy has a different VERSION, reload with a fresh ?v= so stale copies never linger.
-const VERSION = '2026-11-04.1';
+const VERSION = '2026-11-04.2';
 document.querySelector('#msg').insertAdjacentHTML('beforeend', `<p style="opacity:.5;font-size:12px">v${VERSION}</p>`);
 fetch(location.pathname + '?_=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => {
   const live = (t.match(/const VERSION = '([^']+)'/) || [])[1];
