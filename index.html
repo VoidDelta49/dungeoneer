@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Expires" content="0">
 <title>Dungeoneer</title>
 <style>
   body{margin:0;overflow:hidden;background:#000;font-family:monospace;color:#fff}
@@ -31,6 +32,15 @@
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from 'three';
+
+// ---- Cache busting: bump VERSION on every release. On load we refetch this page uncached;
+// if the live copy has a different VERSION, reload with a fresh ?v= so stale copies never linger.
+const VERSION = '2026-11-04.1';
+document.querySelector('#msg').insertAdjacentHTML('beforeend', `<p style="opacity:.5;font-size:12px">v${VERSION}</p>`);
+fetch(location.pathname + '?_=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => {
+  const live = (t.match(/const VERSION = '([^']+)'/) || [])[1];
+  if (live && live !== VERSION) { const u = new URL(location.href); u.searchParams.set('v', live); location.replace(u); }
+}).catch(() => {});
 
 // ---- Level: rooms + corridors carved into a tile grid. ',' = open to the sky, '.' = roofed ----
 const T = 4, W = 64, H = 48, WALL = 8, ROOF = 6, CRATE = 1.2;
