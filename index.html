@@ -1,0 +1,179 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Dungeoneer</title>
+<style>
+  body{margin:0;overflow:hidden;background:#000;font-family:monospace;color:#fff}
+  #hud{position:fixed;left:12px;bottom:12px;font-size:20px;text-shadow:0 0 4px #000}
+  #cross{position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px;background:#fff;border-radius:50%}
+  #msg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;background:#000a;font-size:22px;cursor:pointer}
+  #flash{position:fixed;inset:0;background:#f00;opacity:0;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="cross"></div><div id="hud"></div><div id="flash"></div>
+<div id="msg"><h1>DUNGEONEER</h1><p>Click to start</p><p>WASD move · Mouse look · Click shoot</p></div>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ---- Map: # wall, . floor, S spawner, P player ----
+const MAP = `
+#####################
+#.....#######.......#
+#..P..........S.....#
+#.....#######.......#
+###.###########.#####
+###.###########.#####
+#.......#####.......#
+#...S...........S...#
+#.......#####.......#
+###.#############.###
+###.#############.###
+#.........###.......#
+#....S..........S...#
+#.........###.......#
+#####################`.trim().split('\n');
+const T = 4; // tile size
+const H = MAP.length, W = MAP[0].length;
+const isWall = (x, z) => { const i = Math.floor(z / T), j = Math.floor(x / T); return i < 0 || j < 0 || i >= H || j >= W || MAP[i][j] === '#'; };
+
+// ---- Scene ----
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x050505);
+scene.fog = new THREE.Fog(0x050505, 2, 28);
+const cam = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 100);
+cam.rotation.order = 'YXZ';
+scene.add(new THREE.HemisphereLight(0x8899aa, 0x221100, 0.5));
+const torch = new THREE.PointLight(0xffaa55, 30, 18);
+cam.add(torch); scene.add(cam);
+
+// ---- Build level (instanced walls) ----
+const tex = (c1, c2) => { // tiny procedural checker texture
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64; const g = cv.getContext('2d');
+  g.fillStyle = c1; g.fillRect(0, 0, 64, 64); g.fillStyle = c2;
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 2; x++) g.fillRect(x * 32 + (y % 2) * 16 + 1, y * 16 + 1, 30, 14);
+  const t = new THREE.CanvasTexture(cv); t.magFilter = THREE.NearestFilter; t.colorSpace = THREE.SRGBColorSpace; return t;
+};
+const wallMat = new THREE.MeshStandardMaterial({ map: tex('#222', '#555') });
+const spawns = []; let start = new THREE.Vector3();
+const walls = [];
+MAP.forEach((row, i) => [...row].forEach((c, j) => {
+  const p = new THREE.Vector3(j * T + T / 2, 0, i * T + T / 2);
+  if (c === '#') walls.push(p); else if (c === 'S') spawns.push(p); else if (c === 'P') start.copy(p);
+}));
+const wallMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(T, T, T), wallMat, walls.length);
+const m4 = new THREE.Matrix4();
+walls.forEach((p, k) => wallMesh.setMatrixAt(k, m4.makeTranslation(p.x, T / 2, p.z)));
+scene.add(wallMesh);
+const floorTex = tex('#2a2018', '#3a3024'); floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(W, H);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(W * T, H * T), new THREE.MeshStandardMaterial({ map: floorTex }));
+floor.rotation.x = -Math.PI / 2; floor.position.set(W * T / 2, 0, H * T / 2); scene.add(floor);
+const ceil = floor.clone(); ceil.rotation.x = Math.PI / 2; ceil.position.y = T; scene.add(ceil);
+spawns.forEach(p => { // glowing spawn portals
+  const r = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.1, 8, 24), new THREE.MeshBasicMaterial({ color: 0xaa00ff }));
+  r.rotation.x = -Math.PI / 2; r.position.set(p.x, 0.05, p.z); scene.add(r);
+  const l = new THREE.PointLight(0xaa00ff, 8, 6); l.position.set(p.x, 1, p.z); scene.add(l);
+});
+
+// ---- Weapon (viewmodel) ----
+const gun = new THREE.Group();
+const metal = new THREE.MeshStandardMaterial({ color: 0x444, metalness: 0.8, roughness: 0.4 });
+const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.5), metal); barrel.position.z = -0.25;
+const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.18, 0.08), metal); grip.position.set(0, -0.1, 0);
+const muzzle = new THREE.PointLight(0xffdd88, 0, 4); muzzle.position.z = -0.6;
+gun.add(barrel, grip, muzzle); gun.position.set(0.22, -0.2, -0.35); cam.add(gun);
+
+// ---- Enemies ----
+const enemyGeo = new THREE.IcosahedronGeometry(0.5, 0);
+const eyeGeo = new THREE.SphereGeometry(0.08, 6, 6), eyeMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+const enemies = [];
+function spawnEnemy() {
+  if (enemies.length >= 40) return;
+  const p = spawns[Math.random() * spawns.length | 0];
+  if (p.distanceTo(cam.position) < 6) return; // don't spawn in your face
+  const m = new THREE.Mesh(enemyGeo, new THREE.MeshStandardMaterial({ color: 0x33aa33, flatShading: true }));
+  for (const s of [-1, 1]) { const e = new THREE.Mesh(eyeGeo, eyeMat); e.position.set(s * 0.18, 0.1, -0.42); m.add(e); }
+  m.position.set(p.x, 0.7, p.z); m.userData = { hp: 3, speed: 2 + Math.random() * 1.5, hit: 0 };
+  scene.add(m); enemies.push(m);
+}
+
+// ---- Player / input ----
+const keys = {}; let hp = 100, kills = 0, alive = true, spawnTimer = 0, elapsed = 0, cooldown = 0;
+cam.position.set(start.x, 1.6, start.z);
+const msg = document.getElementById('msg'), hud = document.getElementById('hud'), flash = document.getElementById('flash');
+msg.onclick = () => { if (!alive) location.reload(); else renderer.domElement.requestPointerLock(); };
+document.addEventListener('pointerlockchange', () => msg.style.display = document.pointerLockElement ? 'none' : 'flex');
+addEventListener('keydown', e => keys[e.code] = true);
+addEventListener('keyup', e => keys[e.code] = false);
+addEventListener('mousemove', e => {
+  if (!document.pointerLockElement) return;
+  cam.rotation.y -= e.movementX * 0.002;
+  cam.rotation.x = Math.max(-1.5, Math.min(1.5, cam.rotation.x - e.movementY * 0.002));
+});
+addEventListener('resize', () => { cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+const ray = new THREE.Raycaster();
+addEventListener('mousedown', () => {
+  if (!document.pointerLockElement || cooldown > 0 || !alive) return;
+  cooldown = 0.25; muzzle.intensity = 20; gun.position.z = -0.28;
+  ray.setFromCamera({ x: 0, y: 0 }, cam);
+  const hits = ray.intersectObjects([wallMesh, ...enemies], false);
+  const h = hits[0];
+  if (h && h.object !== wallMesh) {
+    const e = h.object; e.userData.hp--; e.userData.hit = 0.1;
+    e.position.addScaledVector(ray.ray.direction, 0.4); // knockback
+    if (e.userData.hp <= 0) { scene.remove(e); enemies.splice(enemies.indexOf(e), 1); kills++; }
+  }
+});
+
+// Move with axis-separated collision against the grid
+function move(pos, dx, dz, r) {
+  if (!isWall(pos.x + dx + Math.sign(dx) * r, pos.z)) pos.x += dx;
+  if (!isWall(pos.x, pos.z + dz + Math.sign(dz) * r)) pos.z += dz;
+}
+
+// ---- Loop ----
+const clock = new THREE.Clock(), v = new THREE.Vector3();
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const active = alive && document.pointerLockElement;
+  if (active) {
+    elapsed += dt; cooldown -= dt;
+    // movement
+    const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
+    const yaw = cam.rotation.y, sp = 6 * dt;
+    v.set(-Math.sin(yaw) * f + Math.cos(yaw) * s, 0, -Math.cos(yaw) * f - Math.sin(yaw) * s);
+    if (v.lengthSq()) { v.normalize().multiplyScalar(sp); move(cam.position, v.x, v.z, 0.3); }
+    // spawning: gets faster over time
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) { spawnEnemy(); spawnTimer = Math.max(0.3, 2 - elapsed * 0.02); }
+    // enemies chase
+    for (const e of enemies) {
+      v.subVectors(cam.position, e.position); v.y = 0;
+      const d = v.length();
+      if (d < 0.9) { hp -= 25 * dt; flash.style.opacity = 0.35; }
+      else { v.multiplyScalar(e.userData.speed * dt / d); move(e.position, v.x, v.z, 0.4); }
+      e.lookAt(cam.position.x, e.position.y, cam.position.z);
+      e.position.y = 0.7 + Math.sin(elapsed * 6 + e.id) * 0.1;
+      e.userData.hit -= dt; e.material.emissive.setHex(e.userData.hit > 0 ? 0xff0000 : 0);
+    }
+    // separate enemies so they don't stack
+    for (let i = 0; i < enemies.length; i++) for (let j = i + 1; j < enemies.length; j++) {
+      const a = enemies[i].position, b = enemies[j].position; v.subVectors(a, b); v.y = 0;
+      const d = v.length(); if (d < 0.9 && d > 0) { v.multiplyScalar((0.9 - d) / d / 2); move(a, v.x, v.z, 0.4); move(b, -v.x, -v.z, 0.4); }
+    }
+    if (hp <= 0) { alive = false; document.exitPointerLock(); msg.innerHTML = `<h1>YOU DIED</h1><p>Kills: ${kills}</p><p>Click to restart</p>`; }
+  }
+  muzzle.intensity *= 0.8; gun.position.z += (-0.35 - gun.position.z) * 0.2;
+  flash.style.opacity = Math.max(0, flash.style.opacity - dt * 2);
+  hud.textContent = `HP ${Math.max(0, hp | 0)}   KILLS ${kills}   ENEMIES ${enemies.length}`;
+  renderer.render(scene, cam);
+});
+</script>
+</body>
+</html>
