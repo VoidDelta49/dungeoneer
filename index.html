@@ -8,12 +8,19 @@
   #hud{position:fixed;left:12px;bottom:12px;font-size:20px;text-shadow:0 0 4px #000}
   #cross{position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px;background:#fff;border-radius:50%}
   #msg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;background:#000a;font-size:22px;cursor:pointer}
+  #joy,#fire{display:none;position:fixed;bottom:30px;touch-action:none;user-select:none}
+  #joy{left:30px;width:130px;height:130px;border-radius:50%;background:#fff3;border:2px solid #fff6}
+  #knob{position:absolute;left:45px;top:45px;width:40px;height:40px;border-radius:50%;background:#fffa}
+  #fire{right:30px;width:90px;height:90px;border-radius:50%;background:#f336;border:2px solid #f66;font-size:16px;color:#fff}
+  .touch #joy,.touch #fire{display:block}
+  .touch #hud{bottom:auto;top:12px;font-size:14px}
   #flash{position:fixed;inset:0;background:#f00;opacity:0;pointer-events:none}
 </style>
 </head>
 <body>
 <div id="cross"></div><div id="hud"></div><div id="flash"></div>
-<div id="msg"><h1>DUNGEONEER</h1><p>Click to start</p><p>WASD move · Mouse look · Click shoot</p></div>
+<div id="joy"><div id="knob"></div></div><button id="fire">FIRE</button>
+<div id="msg"><h1>DUNGEONEER</h1><p>Click to start</p><p>WASD move · Mouse look · Click shoot</p><p>Touch: left stick move · drag right side to look · FIRE</p></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from 'three';
@@ -106,8 +113,47 @@ function spawnEnemy() {
 const keys = {}; let hp = 100, kills = 0, alive = true, spawnTimer = 0, elapsed = 0, cooldown = 0;
 cam.position.set(start.x, 1.6, start.z);
 const msg = document.getElementById('msg'), hud = document.getElementById('hud'), flash = document.getElementById('flash');
-msg.onclick = () => { if (!alive) location.reload(); else renderer.domElement.requestPointerLock(); };
+const isTouch = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window;
+let touchPlaying = false;
+if (isTouch) document.body.classList.add('touch');
+msg.onclick = () => {
+  if (!alive) location.reload();
+  else if (isTouch) { touchPlaying = true; msg.style.display = 'none'; }
+  else renderer.domElement.requestPointerLock();
+};
 document.addEventListener('pointerlockchange', () => msg.style.display = document.pointerLockElement ? 'none' : 'flex');
+const playing = () => document.pointerLockElement || touchPlaying;
+// Touch: left stick moves, dragging anywhere else looks, FIRE button shoots
+const joy = document.getElementById('joy'), knob = document.getElementById('knob'), fireBtn = document.getElementById('fire');
+let joyId = null, lookId = null, lookX = 0, lookY = 0;
+const stick = { x: 0, y: 0 };
+function setStick(t) {
+  const b = joy.getBoundingClientRect(); let dx = t.clientX - (b.left + 65), dy = t.clientY - (b.top + 65);
+  const d = Math.hypot(dx, dy), m = 50; if (d > m) { dx *= m / d; dy *= m / d; }
+  stick.x = dx / m; stick.y = dy / m; knob.style.transform = `translate(${dx}px,${dy}px)`;
+}
+joy.addEventListener('touchstart', e => { e.preventDefault(); joyId = e.changedTouches[0].identifier; setStick(e.changedTouches[0]); }, { passive: false });
+fireBtn.addEventListener('touchstart', e => { e.preventDefault(); shoot(); }, { passive: false });
+addEventListener('touchstart', e => {
+  for (const t of e.changedTouches) if (lookId === null && !joy.contains(t.target) && t.target !== fireBtn && !msg.contains(t.target)) { lookId = t.identifier; lookX = t.clientX; lookY = t.clientY; }
+});
+addEventListener('touchmove', e => {
+  for (const t of e.changedTouches) {
+    if (t.identifier === joyId) { e.preventDefault(); setStick(t); }
+    else if (t.identifier === lookId) {
+      cam.rotation.y -= (t.clientX - lookX) * 0.005;
+      cam.rotation.x = Math.max(-1.5, Math.min(1.5, cam.rotation.x - (t.clientY - lookY) * 0.005));
+      lookX = t.clientX; lookY = t.clientY;
+    }
+  }
+}, { passive: false });
+const endTouch = e => {
+  for (const t of e.changedTouches) {
+    if (t.identifier === joyId) { joyId = null; stick.x = stick.y = 0; knob.style.transform = ''; }
+    if (t.identifier === lookId) lookId = null;
+  }
+};
+addEventListener('touchend', endTouch); addEventListener('touchcancel', endTouch);
 addEventListener('keydown', e => keys[e.code] = true);
 addEventListener('keyup', e => keys[e.code] = false);
 addEventListener('mousemove', e => {
@@ -118,8 +164,9 @@ addEventListener('mousemove', e => {
 addEventListener('resize', () => { cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
 const ray = new THREE.Raycaster();
-addEventListener('mousedown', () => {
-  if (!document.pointerLockElement || cooldown > 0 || !alive) return;
+addEventListener('mousedown', () => { if (document.pointerLockElement) shoot(); });
+function shoot() {
+  if (!playing() || cooldown > 0 || !alive) return;
   cooldown = 0.25; muzzle.intensity = 20; gun.position.z = -0.28;
   ray.setFromCamera({ x: 0, y: 0 }, cam);
   const hits = ray.intersectObjects([wallMesh, ...enemies], false);
@@ -129,7 +176,7 @@ addEventListener('mousedown', () => {
     e.position.addScaledVector(ray.ray.direction, 0.4); // knockback
     if (e.userData.hp <= 0) { scene.remove(e); enemies.splice(enemies.indexOf(e), 1); kills++; }
   }
-});
+}
 
 // Move with axis-separated collision against the grid
 function move(pos, dx, dz, r) {
@@ -141,14 +188,14 @@ function move(pos, dx, dz, r) {
 const clock = new THREE.Clock(), v = new THREE.Vector3();
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
-  const active = alive && document.pointerLockElement;
+  const active = alive && playing();
   if (active) {
     elapsed += dt; cooldown -= dt;
     // movement
-    const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
+    const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0) - stick.y, s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0) + stick.x;
     const yaw = cam.rotation.y, sp = 6 * dt;
     v.set(-Math.sin(yaw) * f + Math.cos(yaw) * s, 0, -Math.cos(yaw) * f - Math.sin(yaw) * s);
-    if (v.lengthSq()) { v.normalize().multiplyScalar(sp); move(cam.position, v.x, v.z, 0.3); }
+    if (v.lengthSq()) { v.multiplyScalar(sp / Math.max(1, v.length())); move(cam.position, v.x, v.z, 0.3); }
     // spawning: gets faster over time
     spawnTimer -= dt;
     if (spawnTimer <= 0) { spawnEnemy(); spawnTimer = Math.max(0.3, 2 - elapsed * 0.02); }
@@ -167,7 +214,7 @@ renderer.setAnimationLoop(() => {
       const a = enemies[i].position, b = enemies[j].position; v.subVectors(a, b); v.y = 0;
       const d = v.length(); if (d < 0.9 && d > 0) { v.multiplyScalar((0.9 - d) / d / 2); move(a, v.x, v.z, 0.4); move(b, -v.x, -v.z, 0.4); }
     }
-    if (hp <= 0) { alive = false; document.exitPointerLock(); msg.innerHTML = `<h1>YOU DIED</h1><p>Kills: ${kills}</p><p>Click to restart</p>`; }
+    if (hp <= 0) { alive = false; touchPlaying = false; document.exitPointerLock(); msg.style.display = 'flex'; msg.innerHTML = `<h1>YOU DIED</h1><p>Kills: ${kills}</p><p>Click to restart</p>`; }
   }
   muzzle.intensity *= 0.8; gun.position.z += (-0.35 - gun.position.z) * 0.2;
   flash.style.opacity = Math.max(0, flash.style.opacity - dt * 2);
