@@ -21,9 +21,20 @@
   #hitm{position:fixed;left:50%;top:50%;width:40px;height:40px;margin:-20px;opacity:0;pointer-events:none;stroke:#fff;stroke-width:2.5;stroke-linecap:round}
   #msg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;background:#000a;font-size:22px;cursor:pointer;text-align:center}
   #joy,.btn{display:none;position:fixed;touch-action:none;user-select:none}
-  #joy{left:30px;bottom:30px;width:130px;height:130px;border-radius:50%;background:#fff3;border:2px solid #fff6}
+  #joy{left:40px;bottom:40px;opacity:.6;width:130px;height:130px;border-radius:50%;background:#fff3;border:2px solid #fff6}
   #knob{position:absolute;left:45px;top:45px;width:40px;height:40px;border-radius:50%;background:#fffa}
   .btn{border-radius:50%;color:#fff;font:bold 14px monospace;border:2px solid #fff8;background:#fff3}
+  .btn.held{filter:brightness(1.8);transform:scale(.94)}
+  #auto{right:24px;bottom:236px;width:84px;height:36px;border-radius:18px;font-size:11px;opacity:.6}
+  #auto.on{background:#f336;border-color:#f66;opacity:1}
+  #banner{position:fixed;left:50%;top:22%;transform:translateX(-50%);text-align:center;opacity:0;pointer-events:none;text-shadow:0 0 8px #000}
+  #banner b{display:block;font-size:34px;letter-spacing:4px}#banner small{font-size:15px;opacity:.85}
+  #banner.show{animation:ban 2.8s}
+  @keyframes ban{0%{opacity:0;margin-top:-12px}10%,75%{opacity:1;margin-top:0}100%{opacity:0}}
+  .shop{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;max-width:720px}
+  .shop button{font:13px monospace;color:#fff;background:#0af2;border:1px solid #4ff0ff;border-radius:6px;padding:8px 12px;cursor:pointer}
+  .shop button:disabled{opacity:.4;cursor:default}
+  .go{font-size:26px;color:#4ff0ff}
   #fire{right:30px;bottom:30px;width:90px;height:90px;background:#f336;border-color:#f66;font-size:16px}
   #jump{right:135px;bottom:45px;width:70px;height:70px;background:#3f36}
   #slide{right:40px;bottom:140px;width:70px;height:70px;background:#36f6}
@@ -38,19 +49,16 @@
 <body>
 <div id="cross"><i></i><i></i><i></i><i></i></div>
 <svg id="hitm" viewBox="-20 -20 40 40"><path d="M-12-12L-5-5M12-12L5-5M-12 12L-5 5M12 12L5 5"/></svg>
-<div id="hud"></div><div id="hpbar"><div id="hpfill"></div></div><div id="ammo"></div><div id="flash"></div>
+<div id="hud"></div><div id="hpbar"><div id="hpfill"></div></div><div id="ammo"></div><div id="flash"></div><div id="banner"></div>
 <div id="joy"><div id="knob"></div></div>
-<button class="btn" id="fire">FIRE</button><button class="btn" id="jump">JUMP</button><button class="btn" id="slide">SLIDE</button><button class="btn" id="reload">RELOAD</button>
-<div id="msg"><h1>DUNGEONEER</h1><p>Click to start</p>
-<p>WASD move · Mouse look · Hold click to shoot · R reload<br>SPACE jump (hold to bhop) · CTRL / C / SHIFT slide</p>
-<p>Touch: left stick move · drag right side to look · FIRE / JUMP / SLIDE / RELOAD</p></div>
+<button class="btn" id="fire">FIRE</button><button class="btn" id="jump">JUMP</button><button class="btn" id="slide">SLIDE</button><button class="btn" id="reload">RELOAD</button><button class="btn" id="auto">AUTO</button>
+<div id="msg"></div>
 <script>
 // ---- Cache busting: bump VERSION on every release. On load we refetch this page uncached;
 // if the live copy has a different VERSION, reload with a fresh ?v= so stale copies never linger.
 // Every module URL gets ?v=VERSION via the import map below — add new files to MODULES.
-const VERSION = '2026-11-05.1';
-const MODULES = ['main', 'ecs', 'level', 'render', 'input', 'audio', 'nav', 'fx', 'gun', 'systems/player', 'systems/enemies', 'systems/combat', 'systems/view'];
-document.querySelector('#msg').insertAdjacentHTML('beforeend', `<p style="opacity:.5;font-size:12px">v${VERSION}</p>`);
+const VERSION = '2026-11-05.2';
+const MODULES = ['main', 'ecs', 'level', 'render', 'input', 'audio', 'nav', 'fx', 'gun', 'systems/player', 'systems/enemies', 'systems/combat', 'systems/view', 'systems/rooms', 'phone', 'upgrades', 'meta'];
 fetch(location.pathname + '?_=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => {
   const live = (t.match(/const VERSION = '([^']+)'/) || [])[1];
   if (live && live !== VERSION) { const u = new URL(location.href); u.searchParams.set('v', live); location.replace(u); }

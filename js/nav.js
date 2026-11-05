@@ -2,9 +2,12 @@
 import { W, H, T, WALL, CLIMB, top } from './level.js';
 
 const INF = 1e9, dist = new Int32Array(W * H), q = new Int32Array(W * H), tops = new Float32Array(W * H);
-for (let i = 0; i < H; i++) for (let j = 0; j < W; j++) tops[i * W + j] = top(i, j);
 const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]], N8 = [...N4, [1, 1], [1, -1], [-1, 1], [-1, -1]];
 let last = -1;
+export function refreshNav() { // call after the level or room seals change
+  for (let i = 0; i < H; i++) for (let j = 0; j < W; j++) tops[i * W + j] = top(i, j);
+  last = -1;
+}
 
 export function updateFlow(x, z) {
   const i = Math.floor(z / T), j = Math.floor(x / T), k0 = i * W + j;

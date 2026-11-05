@@ -1,10 +1,15 @@
 // Input state (desktop + touch). Systems read `input`; nothing here touches entities.
+// Touch is two-thumb: a floating stick anywhere on the left; on the right, dragging anywhere aims — including
+// while holding FIRE/JUMP/SLIDE/RELOAD, so one thumb can aim + act. AUTO fires when the crosshair is on an enemy.
 import { renderer } from './render.js';
 import { initAudio } from './audio.js';
 
-export const input = { keys: {}, stick: { x: 0, y: 0 }, jump: false, slide: false, fireHeld: false, firePressed: false, reload: false, look: { yaw: 0, pitch: 0 }, touchPlaying: false };
+const pref = (() => { try { return localStorage.getItem('dungeoneer.auto') !== '0'; } catch { return true; } })();
+export const input = { keys: {}, stick: { x: 0, y: 0 }, jump: false, slide: false, fireHeld: false, firePressed: false, reload: false, pick: 0,
+  look: { yaw: 0, pitch: 0 }, touchPlaying: false, autoFire: pref };
 export const isTouch = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window;
 export const playing = () => !!document.pointerLockElement || input.touchPlaying;
+export const tapHandlers = []; // (x, y) => true if the tap was consumed (e.g. a hologram card)
 const msg = document.getElementById('msg');
 if (isTouch) document.body.classList.add('touch');
 
@@ -20,39 +25,63 @@ const turn = (dx, dy, s) => { input.look.yaw -= dx * s; input.look.pitch = Math.
 const fire = on => { input.fireHeld = on && playing(); if (input.fireHeld) input.firePressed = true; };
 
 const keys = input.keys;
-addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Space') e.preventDefault(); if (e.code === 'KeyR') input.reload = true; });
+addEventListener('keydown', e => {
+  keys[e.code] = true; if (e.code === 'Space') e.preventDefault(); if (e.code === 'KeyR') input.reload = true;
+  const n = /^(Digit|Numpad)([1-3])$/.exec(e.code); if (n) input.pick = +n[2];
+});
 addEventListener('keyup', e => keys[e.code] = false);
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 addEventListener('mousemove', e => { if (document.pointerLockElement) turn(e.movementX, e.movementY, 0.002); });
 addEventListener('mousedown', e => { if (document.pointerLockElement && e.button === 0) fire(true); });
 addEventListener('mouseup', e => { if (e.button === 0) fire(false); });
 
-// Touch: left stick moves, dragging elsewhere looks, buttons shoot / jump / slide
-const joy = document.getElementById('joy'), knob = document.getElementById('knob'), stick = input.stick;
-let joyId = null, lookId = null, lookX = 0, lookY = 0;
-function setStick(t) {
-  const b = joy.getBoundingClientRect(); let dx = t.clientX - (b.left + 65), dy = t.clientY - (b.top + 65);
-  const d = Math.hypot(dx, dy), m = 50; if (d > m) { dx *= m / d; dy *= m / d; }
-  stick.x = dx / m; stick.y = dy / m; knob.style.transform = `translate(${dx}px,${dy}px)`;
+// ---- Touch
+const joy = document.getElementById('joy'), knob = document.getElementById('knob'), autoBtn = document.getElementById('auto'), stick = input.stick;
+const roles = new Map(); // touch id -> { btn?, stick?, x, y }
+let fires = 0;
+const setAuto = () => { autoBtn.textContent = `AUTO ${input.autoFire ? 'ON' : 'OFF'}`; autoBtn.classList.toggle('on', input.autoFire); };
+setAuto();
+const press = (id, on) => {
+  if (id === 'fire') fire((fires = Math.max(0, fires + (on ? 1 : -1))) > 0);
+  else if (id === 'jump') input.jump = on;
+  else if (id === 'slide') input.slide = on;
+  else if (id === 'reload' && on) input.reload = true;
+};
+function setStick(r, t) {
+  let dx = t.clientX - r.x, dy = t.clientY - r.y; const d = Math.hypot(dx, dy), m = 55;
+  if (d > m) { dx *= m / d; dy *= m / d; }
+  const k = d < 6 ? 0 : Math.min(1, d / m / .75) / (Math.min(d, m) || 1); // dead zone; full speed at 75% throw
+  stick.x = dx * k; stick.y = dy * k; knob.style.transform = `translate(${dx}px,${dy}px)`;
 }
-joy.addEventListener('touchstart', e => { e.preventDefault(); joyId = e.changedTouches[0].identifier; setStick(e.changedTouches[0]); }, { passive: false });
-const hold = (id, f) => { const b = document.getElementById(id);
-  b.addEventListener('touchstart', e => { e.preventDefault(); f(true); }, { passive: false });
-  b.addEventListener('touchend', () => f(false)); b.addEventListener('touchcancel', () => f(false)); };
-hold('fire', fire); hold('reload', on => on && (input.reload = true)); hold('jump', on => input.jump = on); hold('slide', on => input.slide = on);
+const release = (id, r) => {
+  if (r.btn) { press(r.btn.id, false); r.btn.classList.remove('held'); }
+  if (r.stick) { stick.x = stick.y = 0; knob.style.transform = ''; joy.style.cssText = ''; }
+  roles.delete(id);
+};
+export const releaseTouches = () => roles.forEach((r, id) => release(id, r));
+
 addEventListener('touchstart', e => {
-  for (const t of e.changedTouches) if (lookId === null && !t.target.closest('#joy,.btn,#msg')) { lookId = t.identifier; lookX = t.clientX; lookY = t.clientY; }
-});
+  if (!input.touchPlaying) return; // menus get normal clicks
+  for (const t of e.changedTouches) {
+    const id = t.identifier, x = t.clientX, y = t.clientY, b = t.target.closest?.('.btn');
+    if (tapHandlers.some(f => f(x, y))) continue;
+    if (b?.id === 'auto') { input.autoFire = !input.autoFire; setAuto(); try { localStorage.setItem('dungeoneer.auto', input.autoFire ? '1' : '0'); } catch {} continue; }
+    if (b) { press(b.id, true); b.classList.add('held'); roles.set(id, { btn: b, x, y }); continue; }
+    if (x < innerWidth * .42 && ![...roles.values()].some(r => r.stick)) { // floating stick appears under the thumb
+      joy.style.left = x - 65 + 'px'; joy.style.top = y - 65 + 'px'; joy.style.bottom = 'auto';
+      roles.set(id, { stick: true, x, y }); continue;
+    }
+    roles.set(id, { x, y });
+  }
+  e.preventDefault();
+}, { passive: false });
 addEventListener('touchmove', e => {
   for (const t of e.changedTouches) {
-    if (t.identifier === joyId) { e.preventDefault(); setStick(t); }
-    else if (t.identifier === lookId) { turn(t.clientX - lookX, t.clientY - lookY, 0.005); lookX = t.clientX; lookY = t.clientY; }
+    const r = roles.get(t.identifier); if (!r) continue;
+    if (r.stick) setStick(r, t);
+    else { turn(t.clientX - r.x, t.clientY - r.y, 0.005); r.x = t.clientX; r.y = t.clientY; } // buttons aim too
   }
+  if (input.touchPlaying) e.preventDefault();
 }, { passive: false });
-const endTouch = e => {
-  for (const t of e.changedTouches) {
-    if (t.identifier === joyId) { joyId = null; stick.x = stick.y = 0; knob.style.transform = ''; }
-    if (t.identifier === lookId) lookId = null;
-  }
-};
+const endTouch = e => { for (const t of e.changedTouches) { const r = roles.get(t.identifier); if (r) release(t.identifier, r); } };
 addEventListener('touchend', endTouch); addEventListener('touchcancel', endTouch);

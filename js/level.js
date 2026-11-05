@@ -1,53 +1,24 @@
 // Level data: a 3x3 grid of rooms joined by corridors, carved into a tile grid, then dressed with obstacles.
 // Tiles: '#' wall/pillar, ',' floor open to the sky, '.' roofed floor, 'b' crate, 'B' tall crate, 'h' high block
+// generate(floor) rebuilds everything in place (arrays/vectors are mutated, never reassigned).
 import * as THREE from 'three';
 
 export const T = 4, W = 96, H = 72, WALL = 8, ROOF = 6, CLIMB = 1.3; // CLIMB: max step enemies can jump up
 export const HEIGHT = { b: 1.2, B: 2.4, h: 3.6 }; // each step is jumpable from the one below (player jump ~2m)
 export const grid = Array.from({ length: H }, () => Array(W).fill('#'));
+export const barrier = new Uint8Array(W * H); // room seals: solid while a room is in combat
+export const rooms = [];                      // { x, y, w, h, open }
+export const start = new THREE.Vector3();
+let rf = [];                                  // roof mask (kept under obstacles)
+
 const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 const isFloor = c => c === '.' || c === ',';
 const carve = (x, y, w, h, c) => { for (let i = y; i < y + h; i++) for (let j = x; j < x + w; j++) if (grid[i]?.[j] === '#') grid[i][j] = c; };
-
-// ---- Rooms + corridors
-const CW = 32, CH = 24, COLS = 3, ROWS = 3;
-export const rooms = [];
-for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-  const w = ri(18, 26), h = ri(14, 19);
-  rooms.push({ x: c * CW + ri(2, CW - w - 2), y: r * CH + ri(2, CH - h - 2), w, h, open: Math.random() < 0.5 });
-}
 const ctr = rm => [rm.x + (rm.w >> 1), rm.y + (rm.h >> 1)];
-rooms.forEach(rm => carve(rm.x, rm.y, rm.w, rm.h, rm.open ? ',' : '.'));
-const link = (a, b) => { // 3-wide L-shaped corridor between room centres
-  const [ax, ay] = ctr(a), [bx, by] = ctr(b);
-  carve(Math.min(ax, bx) - 1, ay - 1, Math.abs(bx - ax) + 3, 3, '.');
-  carve(bx - 1, Math.min(ay, by) - 1, 3, Math.abs(by - ay) + 3, '.');
-};
-for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-  if (c < COLS - 1) link(rooms[r * COLS + c], rooms[r * COLS + c + 1]);
-  if (r < ROWS - 1) link(rooms[r * COLS + c], rooms[(r + 1) * COLS + c]);
-}
-const rf = grid.map(r => r.map(c => c === '.')); // roof mask (kept under obstacles)
-
 const tileV = (j, i) => new THREE.Vector3((j + .5) * T, 0, (i + .5) * T);
-const [sx, sy] = ctr(rooms[0]);
-export const start = tileV(sx, sy);
-export const spawns = rooms.slice(1).map(rm => tileV(...ctr(rm)));
-const reserved = [[sx, sy], ...rooms.slice(1).map(ctr)]; // keep spawn + start areas clear
+export const roomCenter = rm => tileV(...ctr(rm));
 
-// ---- Obstacles: random prefabs, rejected if they'd cut any floor off from the rest
-function connected() {
-  let total = 0; for (const row of grid) for (const c of row) if (isFloor(c)) total++;
-  const seen = new Uint8Array(W * H), st = [sy * W + sx]; seen[st[0]] = 1; let n = 0;
-  while (st.length) {
-    const k = st.pop(), i = k / W | 0, j = k % W; n++;
-    for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const kk = (i + a) * W + j + b;
-      if (!seen[kk] && isFloor(grid[i + a][j + b])) { seen[kk] = 1; st.push(kk); }
-    }
-  }
-  return n === total;
-}
+const CW = 32, CH = 24, COLS = 3, ROWS = 3;
 const rect = (w, h, ch, ox = 0, oy = 0) => { const o = []; for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) o.push([x + ox, y + oy, typeof ch === 'function' ? ch() : ch]); return o; };
 const line = (n, ch) => rect(n, 1, ch);
 const PREFABS = [ // [weight, () => cells [dx, dy, tile]]
@@ -60,21 +31,70 @@ const PREFABS = [ // [weight, () => cells [dx, dy, tile]]
 ];
 const totalW = PREFABS.reduce((a, [w]) => a + w, 0);
 const pickPrefab = () => { let s = Math.random() * totalW; for (const [w, f] of PREFABS) if ((s -= w) < 0) return f(); return PREFABS[0][1](); };
-for (const rm of rooms) {
-  for (let n = Math.round(rm.w * rm.h / 20); n > 0; n--) {
-    const rot = ri(0, 3), ox = ri(rm.x + 2, rm.x + rm.w - 3), oy = ri(rm.y + 2, rm.y + rm.h - 3);
-    const cells = pickPrefab().map(([x, y, c]) => { for (let k = 0; k < rot; k++) [x, y] = [y, -x]; return [ox + x, oy + y, c]; });
-    const ok = cells.every(([x, y]) => x >= rm.x + 2 && x < rm.x + rm.w - 2 && y >= rm.y + 2 && y < rm.y + rm.h - 2
-      && isFloor(grid[y][x]) && reserved.every(([rx, ry]) => Math.hypot(x - rx, y - ry) > 2.5));
-    if (!ok) continue;
-    const old = cells.map(([x, y]) => grid[y][x]);
-    cells.forEach(([x, y, c]) => grid[y][x] = c);
-    if (!connected()) cells.forEach(([x, y], k) => grid[y][x] = old[k]);
+
+function connected(sx, sy) {
+  let total = 0; for (const row of grid) for (const c of row) if (isFloor(c)) total++;
+  const seen = new Uint8Array(W * H), st = [sy * W + sx]; seen[st[0]] = 1; let n = 0;
+  while (st.length) {
+    const k = st.pop(), i = k / W | 0, j = k % W; n++;
+    for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const kk = (i + a) * W + j + b;
+      if (!seen[kk] && isFloor(grid[i + a][j + b])) { seen[kk] = 1; st.push(kk); }
+    }
+  }
+  return n === total;
+}
+
+export function generate(floor = 1) {
+  for (const row of grid) row.fill('#');
+  barrier.fill(0); rooms.length = 0;
+  // ---- Rooms + corridors
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const w = ri(18, 26), h = ri(14, 19);
+    rooms.push({ x: c * CW + ri(2, CW - w - 2), y: r * CH + ri(2, CH - h - 2), w, h, open: Math.random() < 0.5 });
+  }
+  rooms.forEach(rm => carve(rm.x, rm.y, rm.w, rm.h, rm.open ? ',' : '.'));
+  const link = (a, b) => { // 3-wide L-shaped corridor between room centres
+    const [ax, ay] = ctr(a), [bx, by] = ctr(b);
+    carve(Math.min(ax, bx) - 1, ay - 1, Math.abs(bx - ax) + 3, 3, '.');
+    carve(bx - 1, Math.min(ay, by) - 1, 3, Math.abs(by - ay) + 3, '.');
+  };
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    if (c < COLS - 1) link(rooms[r * COLS + c], rooms[r * COLS + c + 1]);
+    if (r < ROWS - 1) link(rooms[r * COLS + c], rooms[(r + 1) * COLS + c]);
+  }
+  rf = grid.map(r => r.map(c => c === '.'));
+  const [sx, sy] = ctr(rooms[0]);
+  start.copy(tileV(sx, sy));
+  const reserved = rooms.map(ctr); // keep start + rift/lift areas clear
+  // ---- Obstacles: random prefabs, rejected if they'd cut any floor off from the rest. Deeper floors are more cluttered.
+  const density = 20 - Math.min(floor - 1, 4);
+  for (const rm of rooms) {
+    for (let n = Math.round(rm.w * rm.h / density); n > 0; n--) {
+      const rot = ri(0, 3), ox = ri(rm.x + 2, rm.x + rm.w - 3), oy = ri(rm.y + 2, rm.y + rm.h - 3);
+      const cells = pickPrefab().map(([x, y, c]) => { for (let k = 0; k < rot; k++) [x, y] = [y, -x]; return [ox + x, oy + y, c]; });
+      const ok = cells.every(([x, y]) => x >= rm.x + 2 && x < rm.x + rm.w - 2 && y >= rm.y + 2 && y < rm.y + rm.h - 2
+        && isFloor(grid[y][x]) && reserved.every(([rx, ry]) => Math.hypot(x - rx, y - ry) > 2.5));
+      if (!ok) continue;
+      const old = cells.map(([x, y]) => grid[y][x]);
+      cells.forEach(([x, y, c]) => grid[y][x] = c);
+      if (!connected(sx, sy)) cells.forEach(([x, y], k) => grid[y][x] = old[k]);
+    }
   }
 }
 
+// Floor tiles on the 1-tile ring just outside a room (where corridors enter) — sealed during combat
+export function doorTiles(rm) {
+  const out = [];
+  for (let i = rm.y - 1; i <= rm.y + rm.h; i++) for (let j = rm.x - 1; j <= rm.x + rm.w; j++) {
+    if (i >= rm.y && i < rm.y + rm.h && j >= rm.x && j < rm.x + rm.w) continue;
+    if (grid[i]?.[j] && grid[i][j] !== '#') out.push([i, j]);
+  }
+  return out;
+}
+
 // Height of the solid top of tile (i, j); 99 outside the map
-export const top = (i, j) => (i < 0 || j < 0 || i >= H || j >= W) ? 99 : grid[i][j] === '#' ? WALL : HEIGHT[grid[i][j]] || 0;
+export const top = (i, j) => (i < 0 || j < 0 || i >= H || j >= W) ? 99 : grid[i][j] === '#' || barrier[i * W + j] ? WALL : HEIGHT[grid[i][j]] || 0;
 export const topAt = (x, z) => top(Math.floor(z / T), Math.floor(x / T));
 export const roofed = (i, j) => i >= 0 && j >= 0 && i < H && j < W && rf[i][j];
 

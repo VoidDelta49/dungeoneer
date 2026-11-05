@@ -1,7 +1,8 @@
 // Per-frame presentation: camera follow/feel + recoil/shake, gun animation, sun follow, HUD + damage flash
 import { cam, sun, muzzle } from '../render.js';
 import { input, playing } from '../input.js';
-import { feel, animateGun, WEAPON } from '../gun.js';
+import { feel, animateGun } from '../gun.js';
+import { run } from './rooms.js';
 import { sfx } from '../audio.js';
 
 const $ = id => document.getElementById(id);
@@ -26,14 +27,15 @@ export function view(world, dt) {
   const sx = Math.round(e.pos.x / 4) * 4, sz = Math.round(e.pos.z / 4) * 4;
   sun.position.set(sx + 50, 90, sz + 32); sun.target.position.set(sx, 0, sz);
   animateGun(dt, { speed, grounded: pl.grounded, crouch: pl.crouch, vy: v.y, dip: pl.dip, yaw: input.look.yaw, pitch: input.look.pitch,
-    time: world.time, ammo: w.mag / WEAPON.MAG, reload: w.reload, locked: w.mag === 0 && (w.reload < 0 || w.reload < .8) });
+    time: world.time, ammo: w.mag / e.stats.mag, reload: w.reload, locked: w.mag === 0 && (w.reload < 0 || w.reload < .8) });
 
   const hp = e.health.hp; hurtT -= dt;
   if (hp < lastHp - .01) { flash.style.opacity = .35; feel.shake = Math.max(feel.shake, .06); if (hurtT <= 0) { sfx.hurt(); hurtT = .35; } }
   else flash.style.opacity = Math.max(0, flash.style.opacity - dt * 2);
   lastHp = hp;
-  hpfill.style.width = Math.max(0, hp) + '%';
-  hud.textContent = `HP ${Math.max(0, hp | 0)}   KILLS ${world.kills}   SPD ${speed.toFixed(0)}`;
+  hpfill.style.width = Math.max(0, hp) / e.health.max * 100 + '%';
+  let boss = ''; for (const b of world.query('enemy')) if (b.enemy.ty.boss) boss = `   WARDEN ${Math.ceil(b.health.hp / b.health.max * 100)}%`;
+  hud.textContent = `HP ${Math.max(0, hp | 0)}/${e.health.max}   FLOOR ${run.floor}   ◆${run.cores}   KILLS ${world.kills}${boss}`;
   ammo.innerHTML = w.reload >= 0 ? '<small>RELOADING</small>' : `${w.mag}<small> / ∞</small>`;
   ammo.classList.toggle('low', w.mag <= 4);
   cross.style.setProperty('--g', 5 + w.bloom * 400 + speed * .15 + 'px');

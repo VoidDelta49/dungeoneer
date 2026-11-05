@@ -3,18 +3,24 @@
 // slide boost on crouch, per-axis max speed (lets you air-strafe past it), bhop by holding jump.
 import * as THREE from 'three';
 import { input } from '../input.js';
-import { T, ROOF, start, top, roofed } from '../level.js';
+import { T, ROOF, top, roofed } from '../level.js';
 import { WEAPON } from '../gun.js';
+import { burst } from '../fx.js';
+import { sfx } from '../audio.js';
 
-const MOVE = 90, MAXSPEED = 20, COUNTER = 0.175, THRESH = 0.01, SLIDE_BOOST = 8, SLIDE_COUNTER = 0.2;
+const BASE_MOVE = 90, BASE_MAX = 20, COUNTER = 0.175, THRESH = 0.01, SLIDE_BOOST = 8, SLIDE_COUNTER = 0.2;
 const GRAV = 30, JUMP_V = 11, JUMP_CD = 0.25, R = 0.4;
 export const DT = 0.02; // fixed 50Hz physics tick
 
-export const createPlayer = world => world.add({
-  player: { grounded: false, gTimer: 0, readyJump: true, jumpCd: 0, crouch: false, eye: 1.6, dip: 0 },
-  pos: start.clone(), prev: start.clone(), vel: new THREE.Vector3(), health: { hp: 100 },
-  weapon: { mag: WEAPON.MAG, cd: 0, reload: -1, bloom: 0, last: -1 },
-});
+export const createPlayer = world => world.add({ player: {}, pos: new THREE.Vector3(), prev: new THREE.Vector3(), vel: new THREE.Vector3(), health: {}, weapon: {}, stats: {}, picks: {} });
+export function resetPlayer(e, lv) { // fresh run; lv = meta shop levels
+  Object.assign(e.player, { grounded: false, gTimer: 0, readyJump: true, jumpCd: 0, crouch: false, eye: 1.6, dip: 0, air: 0, jumpWas: false });
+  e.health.max = e.health.hp = 100 + 15 * lv('hp');
+  Object.assign(e.stats, { dmg: 1 + .1 * lv('dmg'), rate: 1, mag: WEAPON.MAG + 3 * lv('mag'), reload: 1, speed: 1, airJumps: 0, leech: 0, pierce: 0, pellets: 1, slideLoad: 0, momentum: 0, explode: 0 });
+  Object.assign(e.weapon, { mag: e.stats.mag, cd: 0, reload: -1, bloom: 0, last: -1, fill: 0 });
+  for (const k in e.picks) delete e.picks[k];
+  e.vel.set(0, 0, 0);
+}
 
 const footTiles = (x, z, f) => { // run f(i,j) over tiles under the player's footprint
   for (let i = Math.floor((z - R) / T); i <= Math.floor((z + R) / T); i++)
@@ -24,7 +30,7 @@ const blockedAt = (x, y, z) => { let b = false; footTiles(x, z, (i, j) => { if (
 
 export function playerPhysics(world, dt) {
   for (const e of world.query('player')) {
-    const pl = e.player, v = e.vel, p = e.pos, keys = input.keys, yaw = input.look.yaw;
+    const pl = e.player, v = e.vel, p = e.pos, keys = input.keys, yaw = input.look.yaw, MOVE = BASE_MOVE * e.stats.speed, MAXSPEED = BASE_MAX * e.stats.speed;
     e.prev.copy(p);
     const fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw);
     let x = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0) + input.stick.x;
@@ -51,6 +57,10 @@ export function playerPhysics(world, dt) {
         if (sp > MAXSPEED) { v.x *= MAXSPEED / sp; v.z *= MAXSPEED / sp; }
       }
     }
+    // mid-air jumps (Grav Boots) need a fresh press; ground jumps can be held to bhop
+    if (pl.grounded) pl.air = e.stats.airJumps;
+    else if (jumping && !pl.jumpWas && pl.air > 0) { pl.air--; v.y = Math.max(v.y, 0) + JUMP_V * .9; sfx.whoosh(); burst(p, 0x66ccff, 14, 4, .3, 0); }
+    pl.jumpWas = jumping;
     // jump
     if (pl.readyJump && jumping && pl.grounded) {
       pl.readyJump = false; pl.jumpCd = JUMP_CD; pl.grounded = false; pl.gTimer = 0;

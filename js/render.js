@@ -1,6 +1,6 @@
 // Scene, camera, lights, level meshes and the weapon viewmodel
 import * as THREE from 'three';
-import { T, W, H, WALL, ROOF, HEIGHT, grid, spawns, top, roofed } from './level.js';
+import { T, W, H, WALL, ROOF, HEIGHT, grid, top, roofed } from './level.js';
 
 export const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(innerWidth, innerHeight);
@@ -36,25 +36,26 @@ const tex = (c1, c2) => { // tiny procedural brick texture
 const inst = (geo, mat, list, y) => {
   const m = new THREE.InstancedMesh(geo, mat, list.length), m4 = new THREE.Matrix4();
   list.forEach((p, k) => m.setMatrixAt(k, m4.makeTranslation(p[0], y, p[1])));
-  m.castShadow = m.receiveShadow = true; scene.add(m); return m;
+  m.castShadow = m.receiveShadow = true; levelGroup.add(m); return m;
 };
-const walls = [], blocks = { b: [], B: [], h: [] }, roofs = [];
-for (let i = 0; i < H; i++) for (let j = 0; j < W; j++) {
-  const p = [(j + .5) * T, (i + .5) * T], c = grid[i][j];
-  if (c === '#') { if ([[0,1],[0,-1],[1,0],[-1,0],[1,1],[-1,-1],[1,-1],[-1,1]].some(([a, b]) => top(i + a, j + b) < WALL)) walls.push(p); }
-  else if (HEIGHT[c]) blocks[c].push(p);
-  if (roofed(i, j)) roofs.push(p);
-}
 const wallTex = tex('#222', '#5a5a5a'); wallTex.repeat.set(1, 2);
-inst(new THREE.BoxGeometry(T, WALL, T), new THREE.MeshStandardMaterial({ map: wallTex }), walls, WALL / 2);
-const blockTex = { b: tex('#4a3115', '#7a5428'), B: tex('#2c333b', '#56606b'), h: tex('#5d5a53', '#8a867c') };
-for (const c in blocks) inst(new THREE.BoxGeometry(T, HEIGHT[c], T), new THREE.MeshStandardMaterial({ map: blockTex[c] }), blocks[c], HEIGHT[c] / 2);
-inst(new THREE.BoxGeometry(T, 0.4, T), new THREE.MeshStandardMaterial({ map: tex('#1a1a1a', '#3a3a3a') }), roofs, ROOF + 0.2);
+const wallMat = new THREE.MeshStandardMaterial({ map: wallTex }), roofMat = new THREE.MeshStandardMaterial({ map: tex('#1a1a1a', '#3a3a3a') });
+const blockMat = { b: tex('#4a3115', '#7a5428'), B: tex('#2c333b', '#56606b'), h: tex('#5d5a53', '#8a867c') };
+for (const c in blockMat) blockMat[c] = new THREE.MeshStandardMaterial({ map: blockMat[c] });
+const levelGroup = new THREE.Group(); scene.add(levelGroup);
+export function buildLevel() { // (re)build static level meshes from grid
+  for (const m of [...levelGroup.children]) { m.geometry.dispose(); m.dispose(); levelGroup.remove(m); }
+  const walls = [], blocks = { b: [], B: [], h: [] }, roofs = [];
+  for (let i = 0; i < H; i++) for (let j = 0; j < W; j++) {
+    const p = [(j + .5) * T, (i + .5) * T], c = grid[i][j];
+    if (c === '#') { if ([[0,1],[0,-1],[1,0],[-1,0],[1,1],[-1,-1],[1,-1],[-1,1]].some(([a, b]) => top(i + a, j + b) < WALL)) walls.push(p); }
+    else if (HEIGHT[c]) blocks[c].push(p);
+    if (roofed(i, j)) roofs.push(p);
+  }
+  inst(new THREE.BoxGeometry(T, WALL, T), wallMat, walls, WALL / 2);
+  for (const c in blocks) inst(new THREE.BoxGeometry(T, HEIGHT[c], T), blockMat[c], blocks[c], HEIGHT[c] / 2);
+  inst(new THREE.BoxGeometry(T, 0.4, T), roofMat, roofs, ROOF + 0.2);
+}
 const floorTex = tex('#2a2018', '#3a3024'); floorTex.repeat.set(W, H);
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(W * T, H * T), new THREE.MeshStandardMaterial({ map: floorTex }));
 floor.rotation.x = -Math.PI / 2; floor.position.set(cx, 0, cz); floor.receiveShadow = true; scene.add(floor);
-spawns.forEach(p => { // glowing spawn portals
-  const r = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.12, 8, 24), new THREE.MeshBasicMaterial({ color: 0xaa00ff }));
-  r.rotation.x = -Math.PI / 2; r.position.set(p.x, 0.05, p.z); scene.add(r);
-});
-

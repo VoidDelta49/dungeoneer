@@ -35,5 +35,9 @@ export const sfx = {
   kill: play(t => { tone(t, .25, .35, 'sine', 600, 70); noise(t, .25, .3, 'lowpass', 2500, 200); }),
   hurt: play(t => tone(t, .2, .35, 'sawtooth', 140, 55)),
   spit: play(t => tone(t, .15, .2, 'sine', 250, 650)),
+  ping: play(t => { tone(t, .1, .2, 'sine', 1320); tone(t + .12, .2, .2, 'sine', 1760); }),
+  buzz: play(t => { for (let k = 0; k < 6; k++) tone(t + k * .08, .05, .12, 'square', 85, 75); }),
+  seal: play(t => { tone(t, .6, .3, 'sawtooth', 90, 40); noise(t, .5, .3, 'lowpass', 900, 150); }),
+  clear: play(t => [523, 659, 784, 1046].forEach((f, k) => tone(t + k * .07, .25, .14, 'triangle', f))),
   pickup: play(t => [660, 880, 1320].forEach((f, k) => tone(t + k * .06, .12, .15, 'triangle', f))),
 };
