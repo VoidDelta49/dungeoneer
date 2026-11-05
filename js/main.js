@@ -17,7 +17,7 @@ import { meta, save, lv, buy, shopHTML } from './meta.js';
 
 const msg = document.getElementById('msg');
 const world = new World();
-Object.assign(world, { time: 0, kills: 0, alive: true, alpha: 0, started: false, deadAt: 0 });
+Object.assign(world, { time: 0, kills: 0, alive: true, alpha: 0, started: false, deadAt: 0, hitstop: 0 }); // hitstop: brief slow-mo on heavy hits
 const player = createPlayer(world);
 
 function newRun() {
@@ -27,7 +27,7 @@ function newRun() {
 }
 const CONTROLS = isTouch
   ? 'Left side: stick (anywhere) · Right side: drag to aim — also while holding any button<br>AUTO fires / slashes when on target · Sword runs: RELOAD = BLOCK · THROW, then walk over it to pick it up'
-  : 'WASD move · Mouse look · Hold click to shoot · R reload<br>SPACE jump (hold to bhop) · CTRL / C / SHIFT slide · 1 / 2 / 3 pick upgrade<br>Sword runs: Click combo · Right-click block (parry: block just before a hit) · E throw — go pick it up within 20s!';
+  : 'WASD move · Mouse look · Hold click to shoot · R reload<br>SPACE jump (hold to bhop) · CTRL / C / SHIFT slide · 1 / 2 / 3 pick upgrade · green pads launch you<br>Gun: headshots hit harder, damage drops off at long range<br>Sword runs: Click combo · Right-click block (parry: block just before a hit) · E throw (ricochets between enemies) — go pick it up within 20s!';
 let menuKind = 'start', earned = 0;
 const pickHTML = () => `<p style="margin-bottom:0">Choose your weapon — it's the only one you get this run</p><div class="pick">${[['gun', '▬ GUN', 'hitscan · reload · range'], ['sword', '⟋ SWORD', 'combo · block/parry · throw']]
   .map(([k, n, d]) => `<button data-weapon="${k}" class="${meta.weapon === k ? 'on' : ''}">${n}<br><small style="font-size:11px;opacity:.7">${d}</small></button>`).join('')}</div>`;
@@ -66,9 +66,10 @@ let acc = 0;
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
   if (world.alive && playing()) {
-    world.time += dt; acc += dt;
+    let gdt = dt; if (world.hitstop > 0) { world.hitstop -= dt; gdt *= .1; }
+    world.time += gdt; acc += gdt;
     while (acc >= DT) { for (const s of fixed) s(world, DT); acc -= DT; }
-    for (const s of update) s(world, dt);
+    for (const s of update) s(world, gdt);
   }
   world.alpha = acc / DT;
   for (const s of present) s(world, dt);

@@ -3,8 +3,9 @@
 import * as THREE from 'three';
 import { glowTex } from './fx.js';
 
-export const WEAPON = { MAG: 18, RATE: 0.095, RELOAD: 1.05, SPREAD: 0.002, BLOOM: 0.009, BLOOM_MAX: 0.045 };
-export const feel = { pitch: 0, yaw: 0, shake: 0 }; // camera recoil/shake, consumed by the view system
+export const WEAPON = { MAG: 18, RATE: 0.1, RELOAD: 1.1, SPREAD: 0.002, BLOOM: 0.011, BLOOM_MAX: 0.05,
+  BODY: .9, HEAD: 1.75, FALL0: 25, FALL1: 55, FALL_MIN: .6 }; // damage multipliers + range falloff (m)
+export const feel = { pitch: 0, yaw: 0, roll: 0, shake: 0 }; // camera recoil/shake, consumed by the view system
 
 export const vmScene = new THREE.Scene();
 export const vmCam = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.01, 10);

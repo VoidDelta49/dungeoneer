@@ -1,6 +1,6 @@
 // Scene, camera, lights, level meshes and the weapon viewmodel
 import * as THREE from 'three';
-import { T, W, H, WALL, ROOF, HEIGHT, grid, top, roofed } from './level.js';
+import { T, W, H, WALL, ROOF, HEIGHT, PAD, grid, top, roofed } from './level.js';
 
 export const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(innerWidth, innerHeight);
@@ -40,21 +40,25 @@ const inst = (geo, mat, list, y) => {
 };
 const wallTex = tex('#222', '#5a5a5a'); wallTex.repeat.set(1, 2);
 const wallMat = new THREE.MeshStandardMaterial({ map: wallTex }), roofMat = new THREE.MeshStandardMaterial({ map: tex('#1a1a1a', '#3a3a3a') });
-const blockMat = { b: tex('#4a3115', '#7a5428'), B: tex('#2c333b', '#56606b'), h: tex('#5d5a53', '#8a867c') };
+const blockMat = { b: tex('#4a3115', '#7a5428'), B: tex('#2c333b', '#56606b'), h: tex('#5d5a53', '#8a867c'), H: tex('#3b2f4a', '#665480'), X: tex('#4a2a22', '#7e4c3c') };
 for (const c in blockMat) blockMat[c] = new THREE.MeshStandardMaterial({ map: blockMat[c] });
+const padMat = new THREE.MeshStandardMaterial({ color: 0x0a3020, emissive: 0x33ff99, emissiveIntensity: 1.6 });
+const padGeo = new THREE.CylinderGeometry(1.3, 1.6, .16, 20);
 const levelGroup = new THREE.Group(); scene.add(levelGroup);
 export function buildLevel() { // (re)build static level meshes from grid
   for (const m of [...levelGroup.children]) { m.geometry.dispose(); m.dispose(); levelGroup.remove(m); }
-  const walls = [], blocks = { b: [], B: [], h: [] }, roofs = [];
+  const walls = [], blocks = Object.fromEntries(Object.keys(HEIGHT).map(c => [c, []])), roofs = [], pads = [];
   for (let i = 0; i < H; i++) for (let j = 0; j < W; j++) {
     const p = [(j + .5) * T, (i + .5) * T], c = grid[i][j];
     if (c === '#') { if ([[0,1],[0,-1],[1,0],[-1,0],[1,1],[-1,-1],[1,-1],[-1,1]].some(([a, b]) => top(i + a, j + b) < WALL)) walls.push(p); }
     else if (HEIGHT[c]) blocks[c].push(p);
+    else if (c === PAD) pads.push(p);
     if (roofed(i, j)) roofs.push(p);
   }
   inst(new THREE.BoxGeometry(T, WALL, T), wallMat, walls, WALL / 2);
   for (const c in blocks) inst(new THREE.BoxGeometry(T, HEIGHT[c], T), blockMat[c], blocks[c], HEIGHT[c] / 2);
   inst(new THREE.BoxGeometry(T, 0.4, T), roofMat, roofs, ROOF + 0.2);
+  inst(padGeo.clone(), padMat, pads, .08);
 }
 const floorTex = tex('#2a2018', '#3a3024'); floorTex.repeat.set(W, H);
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(W * T, H * T), new THREE.MeshStandardMaterial({ map: floorTex }));

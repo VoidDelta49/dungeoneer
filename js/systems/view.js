@@ -8,7 +8,7 @@ import { sfx } from '../audio.js';
 
 const $ = id => document.getElementById(id);
 const fireBtn = $('fire'), reloadBtn = $('reload'), throwBtn = $('throw'), hud = $('hud'), flash = $('flash'), hpfill = $('hpfill'), ammo = $('ammo'), cross = $('cross'), hitm = $('hitm');
-let lastHp = Infinity, hurtT = 0, hitT = 0;
+let lastHp = Infinity, hurtT = 0, hitT = 0, lean = 0;
 
 export function view(world, dt) {
   const e = world.one('player'), pl = e.player, v = e.vel, w = e.weapon, a = world.alpha;
@@ -16,11 +16,11 @@ export function view(world, dt) {
   pl.eye += ((pl.crouch ? 0.9 : 1.6) - pl.eye) * Math.min(1, dt * 15);
   pl.dip *= Math.max(0, 1 - dt * 10);
   cam.position.lerpVectors(e.prev, e.pos, a); cam.position.y += pl.eye - pl.dip;
-  const rec = Math.exp(-dt * 7); feel.pitch *= rec; feel.yaw *= rec; feel.shake *= Math.exp(-dt * 10);
+  const rec = Math.exp(-dt * 7); feel.pitch *= rec; feel.yaw *= rec; feel.roll *= Math.exp(-dt * 9); feel.shake *= Math.exp(-dt * 10);
   cam.rotation.y = input.look.yaw + feel.yaw;
   cam.rotation.x = Math.max(-1.55, Math.min(1.55, input.look.pitch + feel.pitch));
   const side = v.x * Math.cos(cam.rotation.y) - v.z * Math.sin(cam.rotation.y);
-  cam.rotation.z += (-side * 0.003 - cam.rotation.z) * Math.min(1, dt * 10);
+  lean += (-side * 0.003 - lean) * Math.min(1, dt * 10); cam.rotation.z = lean + feel.roll;
   if (playing() && feel.shake > .001) { cam.position.x += (Math.random() - .5) * feel.shake; cam.position.y += (Math.random() - .5) * feel.shake; }
   const speed = Math.hypot(v.x, v.z), fov = 75 + Math.min(speed, 25) * 0.6;
   if (Math.abs(cam.fov - fov) > 0.1) { cam.fov += (fov - cam.fov) * Math.min(1, dt * 8); cam.updateProjectionMatrix(); }
@@ -46,6 +46,6 @@ export function view(world, dt) {
   throwBtn.textContent = sw.thrown ? 'RECALL' : 'THROW'; throwBtn.style.opacity = sw.equipped || (sw.thrown && e.stats.recall) ? 1 : .3;
   document.body.dataset.loadout = e.loadout;
   cross.style.setProperty('--g', 5 + w.bloom * 400 + speed * .15 + 'px');
-  if (world.hitMarker) { hitT = 1; hitm.style.stroke = world.hitMarker > 1 ? '#f33' : '#fff'; world.hitMarker = 0; }
+  if (world.hitMarker) { hitT = 1; hitm.style.stroke = world.hitMarker >= 2 ? '#f33' : world.hitMarker > 1 ? '#ffd23a' : '#fff'; world.hitMarker = 0; }
   hitT = Math.max(0, hitT - dt * 5); hitm.style.opacity = hitT; hitm.style.transform = `scale(${1.3 - hitT * .3})`;
 }

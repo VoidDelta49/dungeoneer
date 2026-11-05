@@ -61,7 +61,7 @@
 // ---- Cache busting: bump VERSION on every release. On load we refetch this page uncached;
 // if the live copy has a different VERSION, reload with a fresh ?v= so stale copies never linger.
 // Every module URL gets ?v=VERSION via the import map below — add new files to MODULES.
-const VERSION = '2026-11-05.4';
+const VERSION = '2026-11-05.5';
 const MODULES = ['main', 'ecs', 'level', 'render', 'input', 'audio', 'nav', 'fx', 'gun', 'systems/player', 'systems/enemies', 'systems/combat', 'systems/view', 'systems/rooms', 'phone', 'upgrades', 'meta', 'sword', 'systems/melee'];
 fetch(location.pathname + '?_=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => {
   const live = (t.match(/const VERSION = '([^']+)'/) || [])[1];

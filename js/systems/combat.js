@@ -9,7 +9,7 @@ import { tracer, burst } from '../fx.js';
 import { sfx } from '../audio.js';
 import { knock } from './enemies.js';
 
-const dir = new THREE.Vector3(), end = new THREE.Vector3(), mz = new THREE.Vector3(), oc = new THREE.Vector3(), nrm = new THREE.Vector3();
+const hc = new THREE.Vector3(), dir = new THREE.Vector3(), end = new THREE.Vector3(), mz = new THREE.Vector3(), oc = new THREE.Vector3(), nrm = new THREE.Vector3();
 const raySphere = (o, d, c, r) => { oc.subVectors(o, c); const b = oc.dot(d), h = b * b - oc.lengthSq() + r * r; return h < 0 ? -1 : -b - Math.sqrt(h); };
 function rayCyl(o, d, cx, cz, r, y0, y1) { // vertical capped cylinder (enemy body hitbox)
   const ox = o.x - cx, oz = o.z - cz, a = d.x * d.x + d.z * d.z, b = ox * d.x + oz * d.z, h = b * b - a * (ox * ox + oz * oz - r * r);
@@ -27,7 +27,7 @@ function cast(world, o, d, max, pad = 1) {
   for (const e of world.query('enemy')) {
     const p = e.mesh.position, [r, h] = e.enemy.ty.hit, g = e.enemy.grow;
     const t = rayCyl(o, d, p.x, p.z, r * g * pad, p.y, p.y + h * g);
-    if (t >= 0 && t < wt) hits.push({ t, e });
+    if (t >= 0 && t < wt) hits.push({ t, e, head: raySphere(o, d, hc.set(p.x, p.y + e.enemy.ty.headY * g, p.z), e.enemy.ty.hr * g * 1.2) >= 0 });
   }
   for (const e of world.query('proj')) { const t = raySphere(o, d, e.mesh.position, .45); if (t > 0 && t < wt) hits.push({ t, e }); }
   return { wall, wt, hits: hits.sort((a, b) => a.t - b.t) };
@@ -37,17 +37,18 @@ const startReload = w => { w.reload = 0; sfx.click(); };
 function shoot(world, pl) {
   const w = pl.weapon, s = pl.stats, o = cam.position;
   w.mag--; w.last = world.time; cam.updateMatrixWorld();
-  const dmg = s.dmg * (Math.hypot(pl.vel.x, pl.vel.z) > 14 ? 1 + s.momentum : 1);
+  const dmg = s.dmg * G.BODY * (Math.hypot(pl.vel.x, pl.vel.z) > 14 ? 1 + s.momentum : 1);
   for (let k = 0; k < s.pellets; k++) {
     const a = Math.random() * 6.283, r = Math.sqrt(Math.random()) * (G.SPREAD + w.bloom + (k ? .035 : 0));
     dir.set(Math.cos(a) * r, Math.sin(a) * r, -1).normalize().applyQuaternion(cam.quaternion);
     const { wall, wt, hits } = cast(world, o, dir, 200);
     let left = 1 + s.pierce, t = wt;
-    for (const { t: ht, e } of hits) {
+    for (const { t: ht, e, head } of hits) {
       if (e.proj) { e.proj.life = 0; continue; } // shoot spit out of the air
-      e.health.hp -= dmg; e.enemy.hit = .08; knock(e, dir.x * .3, dir.z * .3);
-      burst(end.copy(o).addScaledVector(dir, ht), e.enemy.ty.color, 10, 6); sfx.hit();
-      world.hitMarker = Math.max(world.hitMarker || 0, e.health.hp <= 0 ? 2 : 1);
+      const fall = Math.max(G.FALL_MIN, 1 - Math.max(0, ht - G.FALL0) / (G.FALL1 - G.FALL0) * (1 - G.FALL_MIN));
+      e.health.hp -= dmg * fall * (head ? G.HEAD : 1); e.enemy.hit = .08; knock(e, dir.x * .3, dir.z * .3);
+      burst(end.copy(o).addScaledVector(dir, ht), head ? 0xffffff : e.enemy.ty.color, head ? 16 : 10, 6); head ? sfx.headshot() : sfx.hit();
+      world.hitMarker = Math.max(world.hitMarker || 0, e.health.hp <= 0 ? 2 : head ? 1.5 : 1);
       if (--left <= 0) { t = ht; break; }
     }
     end.copy(o).addScaledVector(dir, t);

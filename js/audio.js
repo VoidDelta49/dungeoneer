@@ -31,7 +31,19 @@ export const sfx = {
   slam: play(t => { noise(t, .06, .5, 'bandpass', 1800, 700); tone(t, .08, .35, 'square', 260, 90); }),
   whoosh: play(t => noise(t, .2, .25, 'bandpass', 300, 2500, .12)),
   charge: play(t => tone(t, .1, .06, 'sawtooth', 150, 1200, .45)),
-  hit: play(t => tone(t, .04, .1, 'square', 1500, 1300)),
+  hit: play(t => { tone(t, .04, .12, 'square', 1500, 1100); noise(t, .05, .35, 'bandpass', 2600, 700); tone(t, .06, .25, 'sine', 220, 80); }), // gun: tick + thud
+  headshot: play(t => { tone(t, .05, .14, 'square', 1700, 1300); noise(t, .05, .4, 'bandpass', 3000, 800); tone(t + .01, .22, .16, 'triangle', 2600, 2500); }),
+  swing: play((t, k = 0) => { const p = [1, 1.18, .75][k] * (.95 + Math.random() * .1); // blade cutting air
+    noise(t, .16, .4, 'bandpass', 350 * p, 3400 * p, .05); noise(t + .04, .1, .14, 'highpass', 5200 * p, 2400, .02); }),
+  slash: play((t, heavy) => { const p = .92 + Math.random() * .16; // sword connects: bite, wet body, low thump, edge ring
+    noise(t, .035, .9, 'highpass', 6500 * p, 2500);
+    noise(t, heavy ? .24 : .14, .9, 'lowpass', 2600 * p, 160);
+    tone(t, heavy ? .3 : .17, heavy ? 1 : .75, 'sine', (heavy ? 130 : 185) * p, 38);
+    tone(t + .005, .32, .07, 'triangle', 2300 * p, 2150 * p);
+    if (heavy) { noise(t + .015, .32, .5, 'bandpass', 900, 140); tone(t, .18, .3, 'square', 95, 40); } }),
+  ricochet: play(t => { const p = .9 + Math.random() * .2; tone(t, .26, .18, 'triangle', 2100 * p, 3300 * p); tone(t, .2, .1, 'sine', 1400 * p, 2300 * p); noise(t, .05, .3, 'highpass', 5000, 3000); }),
+  pad: play(t => { tone(t, .35, .3, 'sine', 160, 900, .02); noise(t, .3, .22, 'bandpass', 500, 3200, .05); }),
+  zap: play(t => { tone(t, .14, .18, 'sawtooth', 320, 110); noise(t, .1, .22, 'bandpass', 1600, 500); }),
   kill: play(t => { tone(t, .25, .35, 'sine', 600, 70); noise(t, .25, .3, 'lowpass', 2500, 200); }),
   hurt: play(t => tone(t, .2, .35, 'sawtooth', 140, 55)),
   spit: play(t => tone(t, .15, .2, 'sine', 250, 650)),

@@ -16,6 +16,7 @@ export const UPGRADES = [
   { id: 'flurry', tag: 'sword', name: 'FLURRY', icon: '≋', rar: 0, max: 3, desc: 'Sword swings 15% faster', apply: s => s.sspeed *= 1.15 },
   { id: 'reach', tag: 'sword', name: 'LONG BLADE', icon: '↔', rar: 0, max: 2, desc: '+0.6m sword reach', apply: s => s.reach += .6 },
   { id: 'razor', tag: 'sword', name: 'RAZOR WIND', icon: '✕', rar: 0, max: 2, desc: 'Thrown sword deals +75% damage', apply: s => s.throwDmg *= 1.75 },
+  { id: 'ricochet', tag: 'sword', name: 'RICOCHET', icon: '⟲', rar: 1, max: 2, desc: 'Thrown sword bounces to +2 more enemies', apply: s => s.bounces += 2 },
   { id: 'parry', tag: 'sword', name: 'PARRY MASTER', icon: '◇', rar: 1, max: 2, desc: 'Wider parry window, parries heal 5', apply: s => { s.parry += .1; s.parryHeal += 5; } },
   { id: 'bulwark', tag: 'sword', name: 'BULWARK', icon: '▮', rar: 1, max: 1, desc: 'Blocking absorbs 95% (was 75%)', apply: s => s.block = .95 },
   { id: 'tether', tag: 'sword', name: 'TETHERED HILT', icon: '⤺', rar: 1, max: 1, desc: 'Throw again to recall the sword', apply: s => s.recall = 1 },

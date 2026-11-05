@@ -3,13 +3,13 @@
 // slide boost on crouch, per-axis max speed (lets you air-strafe past it), bhop by holding jump.
 import * as THREE from 'three';
 import { input } from '../input.js';
-import { T, ROOF, top, roofed } from '../level.js';
+import { T, ROOF, PAD, solidTop, tileAt, roofed } from '../level.js';
 import { WEAPON } from '../gun.js';
 import { burst } from '../fx.js';
 import { sfx } from '../audio.js';
 
 const BASE_MOVE = 90, BASE_MAX = 20, COUNTER = 0.175, THRESH = 0.01, SLIDE_BOOST = 8, SLIDE_COUNTER = 0.2;
-const GRAV = 30, JUMP_V = 11, JUMP_CD = 0.25, R = 0.4;
+const GRAV = 30, JUMP_V = 11, JUMP_CD = 0.25, R = 0.4, PAD_V = 21; // pad launch ~7.3m up
 export const DT = 0.02; // fixed 50Hz physics tick
 
 export const createPlayer = world => world.add({ player: {}, pos: new THREE.Vector3(), prev: new THREE.Vector3(), vel: new THREE.Vector3(), health: {}, weapon: {}, stats: {}, picks: {} });
@@ -18,7 +18,7 @@ export function resetPlayer(e, lv, loadout) { // fresh run; lv = meta shop level
   Object.assign(e.player, { grounded: false, gTimer: 0, readyJump: true, jumpCd: 0, crouch: false, eye: 1.6, dip: 0, air: 0, jumpWas: false, block: -1, iframes: 0, swUsed: false });
   e.health.max = e.health.hp = 100 + 15 * lv('hp');
   Object.assign(e.stats, { dmg: 1 + .1 * lv('dmg'), rate: 1, mag: WEAPON.MAG + 3 * lv('mag'), reload: 1, speed: 1, airJumps: 0, leech: 0, pierce: 0, pellets: 1, slideLoad: 0, momentum: 0, explode: 0, secondWind: 0,
-    sdmg: 1 + .1 * lv('dmg'), sspeed: 1, reach: 3, throwDmg: 1, parry: .2, parryHeal: 0, block: .75, recall: 0, finisher: 0 });
+    sdmg: 1 + .1 * lv('dmg'), sspeed: 1, reach: 3, throwDmg: 1, parry: .2, parryHeal: 0, block: .75, recall: 0, finisher: 0, bounces: 2 });
   const sw = loadout === 'sword';
   e.sword = { has: sw, equipped: sw, thrown: false, raise: +sw, swing: -1, t: 0, next: 0, window: 0, queued: false, hit: false, status: '' };
   Object.assign(e.weapon, { mag: e.stats.mag, cd: 0, reload: -1, bloom: 0, last: -1, fill: 0 });
@@ -47,7 +47,7 @@ const footTiles = (x, z, f) => { // run f(i,j) over tiles under the player's foo
   for (let i = Math.floor((z - R) / T); i <= Math.floor((z + R) / T); i++)
     for (let j = Math.floor((x - R) / T); j <= Math.floor((x + R) / T); j++) f(i, j);
 };
-const blockedAt = (x, y, z) => { let b = false; footTiles(x, z, (i, j) => { if (top(i, j) > y + 0.3) b = true; /* step up small ledges */ }); return b; };
+const blockedAt = (x, y, z) => { let b = false; footTiles(x, z, (i, j) => { if (solidTop(i, j) > y + 0.3) b = true; /* step up small ledges */ }); return b; };
 
 export function playerPhysics(world, dt) {
   for (const e of world.query('player')) {
@@ -101,8 +101,12 @@ export function playerPhysics(world, dt) {
     p.x += v.x * dt; if (blockedAt(p.x, p.y, p.z)) { p.x -= v.x * dt; v.x = 0; }
     p.z += v.z * dt; if (blockedAt(p.x, p.y, p.z)) { p.z -= v.z * dt; v.z = 0; }
     p.y += v.y * dt;
-    let gh = 0, ceil = 99; footTiles(p.x, p.z, (i, j) => { gh = Math.max(gh, top(i, j) <= p.y + 0.3 ? top(i, j) : 0); if (roofed(i, j)) ceil = ROOF; });
+    let gh = 0, ceil = 99; footTiles(p.x, p.z, (i, j) => { const t = solidTop(i, j); gh = Math.max(gh, t <= p.y + 0.3 ? t : 0); if (roofed(i, j)) ceil = ROOF; });
     if (p.y <= gh) { p.y = gh; if (v.y < -6) pl.dip = Math.min(0.35, -v.y * 0.02); if (v.y < 0) v.y = 0; pl.grounded = true; pl.gTimer = 0.1; } // 0.1s coyote time
     if (p.y + h > ceil) { p.y = ceil - h; if (v.y > 0) v.y = 0; }
+    if (pl.grounded && v.y <= 0 && p.y < .3 && tileAt(p.x, p.z) === PAD) { // jump pad
+      v.y = PAD_V; pl.grounded = false; pl.gTimer = 0; pl.readyJump = false; pl.jumpCd = JUMP_CD;
+      sfx.pad(); burst(p.clone().setY(p.y + .2), 0x33ff99, 30, 7, .5, 6);
+    }
   }
 }
