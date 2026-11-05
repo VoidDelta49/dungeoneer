@@ -1,6 +1,7 @@
 // Meta-progression: Cores earned per run buy permanent upgrades (saved in localStorage)
 const KEY = 'dungeoneer.meta';
 export const meta = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || null; } catch { return null; } })() || { cores: 0, lv: {}, best: 0 };
+meta.weapon ??= 'gun'; // loadout for the next run
 export const save = () => { try { localStorage.setItem(KEY, JSON.stringify(meta)); } catch {} };
 export const lv = id => meta.lv[id] || 0;
 const SHOP = [

@@ -23,17 +23,19 @@ const player = createPlayer(world);
 function newRun() {
   Object.assign(world, { time: 0, kills: 0, alive: true });
   Object.assign(run, { cores: 0, cleared: 0 });
-  resetPlayer(player, lv); resetPhone(); loadFloor(world, 1);
+  resetPlayer(player, lv, meta.weapon); resetPhone(); loadFloor(world, 1);
 }
 const CONTROLS = isTouch
-  ? 'Left side: stick (anywhere) · Right side: drag to aim — also while holding any button<br>AUTO fires / slashes when on target · SWORD swaps · RELOAD becomes BLOCK with the sword · THROW, then walk over it to pick it up'
-  : 'WASD move · Mouse look · Hold click to shoot · R reload<br>SPACE jump (hold to bhop) · CTRL / C / SHIFT slide · 1 / 2 / 3 pick upgrade<br>Q / wheel swap sword · Click combo · Right-click block (parry: block just before a hit) · E throw — go pick it up within 20s!';
+  ? 'Left side: stick (anywhere) · Right side: drag to aim — also while holding any button<br>AUTO fires / slashes when on target · Sword runs: RELOAD = BLOCK · THROW, then walk over it to pick it up'
+  : 'WASD move · Mouse look · Hold click to shoot · R reload<br>SPACE jump (hold to bhop) · CTRL / C / SHIFT slide · 1 / 2 / 3 pick upgrade<br>Sword runs: Click combo · Right-click block (parry: block just before a hit) · E throw — go pick it up within 20s!';
 let menuKind = 'start', earned = 0;
+const pickHTML = () => `<p style="margin-bottom:0">Choose your weapon — it's the only one you get this run</p><div class="pick">${[['gun', '▬ GUN', 'hitscan · reload · range'], ['sword', '⟋ SWORD', 'combo · block/parry · throw']]
+  .map(([k, n, d]) => `<button data-weapon="${k}" class="${meta.weapon === k ? 'on' : ''}">${n}<br><small style="font-size:11px;opacity:.7">${d}</small></button>`).join('')}</div>`;
 function menu(kind) {
   menuKind = kind;
   const head = { start: '<h1>DUNGEONEER</h1><p>Seal the rifts. Ride the lift deeper. Don\'t die.</p>', pause: '<h1>PAUSED</h1>',
     dead: `<h1>YOU DIED</h1><p>Floor ${run.floor} · ${run.cleared} rooms · ${world.kills} kills · ${world.time | 0}s · +${earned} ◆</p>` }[kind];
-  msg.innerHTML = `${head}${kind === 'pause' ? '' : shopHTML()}<p class="go">${isTouch ? 'Tap' : 'Click'} to ${kind === 'pause' ? 'resume' : kind === 'dead' ? 'start a new run' : 'start'}</p><p style="opacity:.7;font-size:14px">${CONTROLS}</p>`;
+  msg.innerHTML = `${head}${kind === 'pause' ? '' : pickHTML() + shopHTML()}<p class="go">${isTouch ? 'Tap' : 'Click'} to ${kind === 'pause' ? 'resume' : kind === 'dead' ? 'start a new run' : 'start'}</p><p style="opacity:.7;font-size:14px">${CONTROLS}</p>`;
 }
 newRun(); menu('start');
 
@@ -48,7 +50,10 @@ document.addEventListener('pointerlockchange', () => { if (!document.pointerLock
 msg.onclick = e => {
   const b = e.target.closest('[data-buy]');
   if (b) return buy(b.dataset.buy), menu(menuKind);
-  if (!world.alive) { if (performance.now() - world.deadAt < 1000) return; newRun(); }
+  const wpn = e.target.closest('[data-weapon]');
+  if (wpn) { meta.weapon = wpn.dataset.weapon; save(); return menu(menuKind); }
+  if (!world.alive && performance.now() - world.deadAt < 1000) return;
+  if (!world.alive || !world.started) newRun(); // loadout is applied as the run starts
   world.started = true; releaseTouches(); lock();
 };
 

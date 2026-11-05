@@ -1,4 +1,4 @@
-// Sword gameplay: swap (Q / wheel), 3-hit combo (click), block + parry (right-click), throw (E).
+// Sword gameplay (sword runs only): 3-hit combo (click), block + parry (right-click), throw (E).
 // A thrown sword flies, cuts through enemies, then sticks where it lands: walk over it within 20s or it's
 // gone for the run (also lost if you take the lift without it). Tethered Hilt lets you recall it.
 import * as THREE from 'three';
@@ -104,7 +104,6 @@ export function lose(world, pl, e = world.one('thrown')) {
 export function melee(world, dt) {
   const pl = world.one('player'), sw = pl.sword, s = pl.stats, p = pl.player;
   for (const e of world.query('thrown')) thrownUpdate(world, pl, e, dt);
-  if (input.swap) { input.swap = false; if (sw.has && !sw.thrown && sw.swing < 0) { sw.equipped = !sw.equipped; sfx.click(); } }
   if (input.throw) {
     input.throw = false;
     if (sw.thrown && s.recall) { const t = world.one('thrown')?.thrown; if (t && t.state !== 'recall') { t.state = 'recall'; t.hit.clear(); t.beam.visible = false; sfx.whoosh(); } }

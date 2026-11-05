@@ -13,12 +13,14 @@ const GRAV = 30, JUMP_V = 11, JUMP_CD = 0.25, R = 0.4;
 export const DT = 0.02; // fixed 50Hz physics tick
 
 export const createPlayer = world => world.add({ player: {}, pos: new THREE.Vector3(), prev: new THREE.Vector3(), vel: new THREE.Vector3(), health: {}, weapon: {}, stats: {}, picks: {} });
-export function resetPlayer(e, lv) { // fresh run; lv = meta shop levels
+export function resetPlayer(e, lv, loadout) { // fresh run; lv = meta shop levels; loadout = 'gun' | 'sword' for the whole run
+  e.loadout = loadout;
   Object.assign(e.player, { grounded: false, gTimer: 0, readyJump: true, jumpCd: 0, crouch: false, eye: 1.6, dip: 0, air: 0, jumpWas: false, block: -1, iframes: 0, swUsed: false });
   e.health.max = e.health.hp = 100 + 15 * lv('hp');
   Object.assign(e.stats, { dmg: 1 + .1 * lv('dmg'), rate: 1, mag: WEAPON.MAG + 3 * lv('mag'), reload: 1, speed: 1, airJumps: 0, leech: 0, pierce: 0, pellets: 1, slideLoad: 0, momentum: 0, explode: 0, secondWind: 0,
     sdmg: 1 + .1 * lv('dmg'), sspeed: 1, reach: 3, throwDmg: 1, parry: .2, parryHeal: 0, block: .75, recall: 0, finisher: 0 });
-  e.sword = { has: true, equipped: false, thrown: false, raise: 0, swing: -1, t: 0, next: 0, window: 0, queued: false, hit: false, status: '' };
+  const sw = loadout === 'sword';
+  e.sword = { has: sw, equipped: sw, thrown: false, raise: +sw, swing: -1, t: 0, next: 0, window: 0, queued: false, hit: false, status: '' };
   Object.assign(e.weapon, { mag: e.stats.mag, cd: 0, reload: -1, bloom: 0, last: -1, fill: 0 });
   for (const k in e.picks) delete e.picks[k];
   e.vel.set(0, 0, 0);

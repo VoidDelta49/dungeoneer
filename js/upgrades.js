@@ -1,16 +1,16 @@
 // In-run upgrade pool. apply(stats, player) mutates the player's stats; max = stack limit.
-// tag 'sword' upgrades are only offered while you still own the sword.
+// tagged upgrades are only offered for the run's chosen weapon (sword ones stop once it's lost).
 export const RARITY = [{ name: 'COMMON', color: '#4ff0ff', w: 60 }, { name: 'RARE', color: '#b98bff', w: 30 }, { name: 'EPIC', color: '#ffb43a', w: 10 }];
 export const UPGRADES = [
   // gun
-  { id: 'dmg', name: 'HOLLOW POINTS', icon: '✦', rar: 0, max: 4, desc: '+20% gun damage', apply: s => s.dmg *= 1.2 },
-  { id: 'rate', name: 'HAIR TRIGGER', icon: '»', rar: 0, max: 3, desc: '+10% fire rate', apply: s => s.rate *= 1.1 },
-  { id: 'heavy', name: 'HEAVY ROUNDS', icon: '●', rar: 1, max: 2, desc: '+45% gun damage, -15% fire rate', apply: s => { s.dmg *= 1.45; s.rate *= .85; } },
-  { id: 'mag', name: 'DRUM MAG', icon: '≡', rar: 0, max: 3, desc: '+6 rounds per magazine', apply: (s, e) => { s.mag += 6; e.weapon.mag += 6; } },
-  { id: 'reload', name: 'SPEED LOADER', icon: '↻', rar: 0, max: 3, desc: 'Reload 25% faster', apply: s => s.reload *= .75 },
-  { id: 'pierce', name: 'TUNGSTEN CORE', icon: '→', rar: 1, max: 2, desc: 'Bullets pierce +1 enemy', apply: s => s.pierce++ },
-  { id: 'split', name: 'SPLIT SHOT', icon: '∴', rar: 1, max: 2, desc: '+1 bullet per shot, -25% gun damage', apply: s => { s.pellets++; s.dmg *= .75; } },
-  { id: 'slide', name: 'SLIDE DYNAMO', icon: '∿', rar: 1, max: 1, desc: 'Fast slides refill your mag', apply: s => s.slideLoad = 1 },
+  { tag: 'gun', id: 'dmg', name: 'HOLLOW POINTS', icon: '✦', rar: 0, max: 4, desc: '+20% gun damage', apply: s => s.dmg *= 1.2 },
+  { tag: 'gun', id: 'rate', name: 'HAIR TRIGGER', icon: '»', rar: 0, max: 3, desc: '+10% fire rate', apply: s => s.rate *= 1.1 },
+  { tag: 'gun', id: 'heavy', name: 'HEAVY ROUNDS', icon: '●', rar: 1, max: 2, desc: '+45% gun damage, -15% fire rate', apply: s => { s.dmg *= 1.45; s.rate *= .85; } },
+  { tag: 'gun', id: 'mag', name: 'DRUM MAG', icon: '≡', rar: 0, max: 3, desc: '+6 rounds per magazine', apply: (s, e) => { s.mag += 6; e.weapon.mag += 6; } },
+  { tag: 'gun', id: 'reload', name: 'SPEED LOADER', icon: '↻', rar: 0, max: 3, desc: 'Reload 25% faster', apply: s => s.reload *= .75 },
+  { tag: 'gun', id: 'pierce', name: 'TUNGSTEN CORE', icon: '→', rar: 1, max: 2, desc: 'Bullets pierce +1 enemy', apply: s => s.pierce++ },
+  { tag: 'gun', id: 'split', name: 'SPLIT SHOT', icon: '∴', rar: 1, max: 2, desc: '+1 bullet per shot, -25% gun damage', apply: s => { s.pellets++; s.dmg *= .75; } },
+  { tag: 'gun', id: 'slide', name: 'SLIDE DYNAMO', icon: '∿', rar: 1, max: 1, desc: 'Fast slides refill your mag', apply: s => s.slideLoad = 1 },
   // sword
   { id: 'keen', tag: 'sword', name: 'KEEN EDGE', icon: '⟋', rar: 0, max: 4, desc: '+25% sword damage', apply: s => s.sdmg *= 1.25 },
   { id: 'flurry', tag: 'sword', name: 'FLURRY', icon: '≋', rar: 0, max: 3, desc: 'Sword swings 15% faster', apply: s => s.sspeed *= 1.15 },
@@ -31,7 +31,7 @@ export const UPGRADES = [
 ];
 
 export function rollUpgrades(e, n = 3) {
-  const pool = UPGRADES.filter(u => (e.picks[u.id] || 0) < u.max && (u.tag !== 'sword' || e.sword.has)), out = [];
+  const pool = UPGRADES.filter(u => (e.picks[u.id] || 0) < u.max && (!u.tag || u.tag === e.loadout && (u.tag !== 'sword' || e.sword.has))), out = [];
   while (out.length < n && pool.length) {
     let r = Math.random() * pool.reduce((a, u) => a + RARITY[u.rar].w, 0), k = 0;
     while ((r -= RARITY[pool[k].rar].w) > 0) k++;

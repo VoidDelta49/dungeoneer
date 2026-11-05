@@ -5,7 +5,7 @@ import { renderer } from './render.js';
 import { initAudio } from './audio.js';
 
 const pref = (() => { try { return localStorage.getItem('dungeoneer.auto') !== '0'; } catch { return true; } })();
-export const input = { keys: {}, stick: { x: 0, y: 0 }, jump: false, slide: false, fireHeld: false, firePressed: false, reload: false, pick: 0, swap: false, throw: false, block: false, melee: false,
+export const input = { keys: {}, stick: { x: 0, y: 0 }, jump: false, slide: false, fireHeld: false, firePressed: false, reload: false, pick: 0, throw: false, block: false, melee: false,
   look: { yaw: 0, pitch: 0 }, touchPlaying: false, autoFire: pref };
 export const isTouch = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window;
 export const playing = () => !!document.pointerLockElement || input.touchPlaying;
@@ -26,7 +26,7 @@ const fire = on => { input.fireHeld = on && playing(); if (input.fireHeld) input
 
 const keys = input.keys;
 addEventListener('keydown', e => {
-  keys[e.code] = true; if (e.code === 'Space') e.preventDefault(); if (e.code === 'KeyR') input.reload = true; if (e.code === 'KeyQ') input.swap = true; if (e.code === 'KeyE' || e.code === 'KeyF') input.throw = true;
+  keys[e.code] = true; if (e.code === 'Space') e.preventDefault(); if (e.code === 'KeyR') input.reload = true; if (e.code === 'KeyE' || e.code === 'KeyF') input.throw = true;
   const n = /^(Digit|Numpad)([1-3])$/.exec(e.code); if (n) input.pick = +n[2];
 });
 addEventListener('keyup', e => keys[e.code] = false);
@@ -35,8 +35,6 @@ addEventListener('mousemove', e => { if (document.pointerLockElement) turn(e.mov
 addEventListener('mousedown', e => { if (!document.pointerLockElement) return; if (e.button === 0) fire(true); if (e.button === 2) input.block = true; });
 addEventListener('mouseup', e => { if (e.button === 0) fire(false); if (e.button === 2) input.block = false; });
 addEventListener('contextmenu', e => e.preventDefault());
-let wheelT = 0;
-addEventListener('wheel', e => { if (document.pointerLockElement && performance.now() - wheelT > 250) { wheelT = performance.now(); input.swap = true; } });
 
 // ---- Touch
 const joy = document.getElementById('joy'), knob = document.getElementById('knob'), autoBtn = document.getElementById('auto'), stick = input.stick;
@@ -49,7 +47,6 @@ const press = (id, on) => {
   else if (id === 'jump') input.jump = on;
   else if (id === 'slide') input.slide = on;
   else if (id === 'reload') { if (!on) input.block = false; else if (input.melee) input.block = true; else input.reload = true; } // RELOAD doubles as BLOCK with the sword
-  else if (id === 'swap' && on) input.swap = true;
   else if (id === 'throw' && on) input.throw = true;
 };
 function setStick(r, t) {
