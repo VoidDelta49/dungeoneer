@@ -7,8 +7,18 @@
 <title>Dungeoneer</title>
 <style>
   body{margin:0;overflow:hidden;background:#000;font-family:monospace;color:#fff}
-  #hud{position:fixed;left:12px;bottom:12px;font-size:20px;text-shadow:0 0 4px #000}
-  #cross{position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px;background:#fff;border-radius:50%}
+  #hud{position:fixed;left:12px;bottom:30px;font-size:20px;text-shadow:0 0 4px #000}
+  #hpbar{position:fixed;left:12px;bottom:12px;width:220px;height:10px;background:#0008;border:1px solid #fff6}
+  #hpfill{height:100%;background:linear-gradient(90deg,#e33,#f76);transition:width .15s}
+  #ammo{position:fixed;right:20px;bottom:12px;font-size:44px;font-weight:bold;text-shadow:0 0 6px #000}
+  #ammo small{font-size:18px;opacity:.7}
+  #ammo.low{color:#ff5a3a}
+  #cross{position:fixed;left:50%;top:50%;--g:6px}
+  #cross i{position:absolute;background:#fff;box-shadow:0 0 2px #000;width:2px;height:8px;left:-1px;top:calc(-8px - var(--g))}
+  #cross i:nth-child(2){top:var(--g)}
+  #cross i:nth-child(3){width:8px;height:2px;top:-1px;left:calc(-8px - var(--g))}
+  #cross i:nth-child(4){width:8px;height:2px;top:-1px;left:var(--g)}
+  #hitm{position:fixed;left:50%;top:50%;width:40px;height:40px;margin:-20px;opacity:0;pointer-events:none;stroke:#fff;stroke-width:2.5;stroke-linecap:round}
   #msg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;background:#000a;font-size:22px;cursor:pointer;text-align:center}
   #joy,.btn{display:none;position:fixed;touch-action:none;user-select:none}
   #joy{left:30px;bottom:30px;width:130px;height:130px;border-radius:50%;background:#fff3;border:2px solid #fff6}
@@ -18,23 +28,28 @@
   #jump{right:135px;bottom:45px;width:70px;height:70px;background:#3f36}
   #slide{right:40px;bottom:140px;width:70px;height:70px;background:#36f6}
   .touch #joy,.touch .btn{display:block}
+  #reload{right:150px;bottom:140px;width:60px;height:60px;background:#fa36;font-size:11px}
   .touch #hud{bottom:auto;top:12px;font-size:14px}
+  .touch #hpbar{bottom:auto;top:34px;width:150px}
+  .touch #ammo{bottom:auto;top:8px;font-size:28px}
   #flash{position:fixed;inset:0;background:#f00;opacity:0;pointer-events:none}
 </style>
 </head>
 <body>
-<div id="cross"></div><div id="hud"></div><div id="flash"></div>
+<div id="cross"><i></i><i></i><i></i><i></i></div>
+<svg id="hitm" viewBox="-20 -20 40 40"><path d="M-12-12L-5-5M12-12L5-5M-12 12L-5 5M12 12L5 5"/></svg>
+<div id="hud"></div><div id="hpbar"><div id="hpfill"></div></div><div id="ammo"></div><div id="flash"></div>
 <div id="joy"><div id="knob"></div></div>
-<button class="btn" id="fire">FIRE</button><button class="btn" id="jump">JUMP</button><button class="btn" id="slide">SLIDE</button>
+<button class="btn" id="fire">FIRE</button><button class="btn" id="jump">JUMP</button><button class="btn" id="slide">SLIDE</button><button class="btn" id="reload">RELOAD</button>
 <div id="msg"><h1>DUNGEONEER</h1><p>Click to start</p>
-<p>WASD move · Mouse look · Click shoot<br>SPACE jump (hold to bhop) · CTRL / C / SHIFT slide</p>
-<p>Touch: left stick move · drag right side to look · FIRE / JUMP / SLIDE</p></div>
+<p>WASD move · Mouse look · Hold click to shoot · R reload<br>SPACE jump (hold to bhop) · CTRL / C / SHIFT slide</p>
+<p>Touch: left stick move · drag right side to look · FIRE / JUMP / SLIDE / RELOAD</p></div>
 <script>
 // ---- Cache busting: bump VERSION on every release. On load we refetch this page uncached;
 // if the live copy has a different VERSION, reload with a fresh ?v= so stale copies never linger.
 // Every module URL gets ?v=VERSION via the import map below — add new files to MODULES.
-const VERSION = '2026-11-04.3';
-const MODULES = ['main', 'ecs', 'level', 'render', 'input', 'systems/player', 'systems/enemies', 'systems/combat', 'systems/view'];
+const VERSION = '2026-11-05.1';
+const MODULES = ['main', 'ecs', 'level', 'render', 'input', 'audio', 'nav', 'fx', 'gun', 'systems/player', 'systems/enemies', 'systems/combat', 'systems/view'];
 document.querySelector('#msg').insertAdjacentHTML('beforeend', `<p style="opacity:.5;font-size:12px">v${VERSION}</p>`);
 fetch(location.pathname + '?_=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => {
   const live = (t.match(/const VERSION = '([^']+)'/) || [])[1];

@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { input } from '../input.js';
 import { T, ROOF, start, top, roofed } from '../level.js';
+import { WEAPON } from '../gun.js';
 
 const MOVE = 90, MAXSPEED = 20, COUNTER = 0.175, THRESH = 0.01, SLIDE_BOOST = 8, SLIDE_COUNTER = 0.2;
 const GRAV = 30, JUMP_V = 11, JUMP_CD = 0.25, R = 0.4;
@@ -12,6 +13,7 @@ export const DT = 0.02; // fixed 50Hz physics tick
 export const createPlayer = world => world.add({
   player: { grounded: false, gTimer: 0, readyJump: true, jumpCd: 0, crouch: false, eye: 1.6, dip: 0 },
   pos: start.clone(), prev: start.clone(), vel: new THREE.Vector3(), health: { hp: 100 },
+  weapon: { mag: WEAPON.MAG, cd: 0, reload: -1, bloom: 0, last: -1 },
 });
 
 const footTiles = (x, z, f) => { // run f(i,j) over tiles under the player's footprint

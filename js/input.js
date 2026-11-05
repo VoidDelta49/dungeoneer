@@ -1,28 +1,31 @@
 // Input state (desktop + touch). Systems read `input`; nothing here touches entities.
 import { renderer } from './render.js';
+import { initAudio } from './audio.js';
 
-export const input = { keys: {}, stick: { x: 0, y: 0 }, jump: false, slide: false, fire: false, look: { yaw: 0, pitch: 0 }, touchPlaying: false };
+export const input = { keys: {}, stick: { x: 0, y: 0 }, jump: false, slide: false, fireHeld: false, firePressed: false, reload: false, look: { yaw: 0, pitch: 0 }, touchPlaying: false };
 export const isTouch = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window;
 export const playing = () => !!document.pointerLockElement || input.touchPlaying;
 const msg = document.getElementById('msg');
 if (isTouch) document.body.classList.add('touch');
 
 export function lock() {
+  initAudio();
   document.documentElement.requestFullscreen?.().catch(() => {});
   if (isTouch) { input.touchPlaying = true; msg.style.display = 'none'; }
   else renderer.domElement.requestPointerLock({ unadjustedMovement: true })?.catch?.(() => renderer.domElement.requestPointerLock()); // raw mouse, no OS accel/jitter
 }
-document.addEventListener('pointerlockchange', () => msg.style.display = document.pointerLockElement ? 'none' : 'flex');
+document.addEventListener('pointerlockchange', () => { msg.style.display = document.pointerLockElement ? 'none' : 'flex'; input.fireHeld = false; });
 
 const turn = (dx, dy, s) => { input.look.yaw -= dx * s; input.look.pitch = Math.max(-1.5, Math.min(1.5, input.look.pitch - dy * s)); };
-const fire = () => { if (playing()) input.fire = true; };
+const fire = on => { input.fireHeld = on && playing(); if (input.fireHeld) input.firePressed = true; };
 
 const keys = input.keys;
-addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Space') e.preventDefault(); });
+addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Space') e.preventDefault(); if (e.code === 'KeyR') input.reload = true; });
 addEventListener('keyup', e => keys[e.code] = false);
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 addEventListener('mousemove', e => { if (document.pointerLockElement) turn(e.movementX, e.movementY, 0.002); });
-addEventListener('mousedown', () => { if (document.pointerLockElement) fire(); });
+addEventListener('mousedown', e => { if (document.pointerLockElement && e.button === 0) fire(true); });
+addEventListener('mouseup', e => { if (e.button === 0) fire(false); });
 
 // Touch: left stick moves, dragging elsewhere looks, buttons shoot / jump / slide
 const joy = document.getElementById('joy'), knob = document.getElementById('knob'), stick = input.stick;
@@ -36,7 +39,7 @@ joy.addEventListener('touchstart', e => { e.preventDefault(); joyId = e.changedT
 const hold = (id, f) => { const b = document.getElementById(id);
   b.addEventListener('touchstart', e => { e.preventDefault(); f(true); }, { passive: false });
   b.addEventListener('touchend', () => f(false)); b.addEventListener('touchcancel', () => f(false)); };
-hold('fire', on => on && fire()); hold('jump', on => input.jump = on); hold('slide', on => input.slide = on);
+hold('fire', fire); hold('reload', on => on && (input.reload = true)); hold('jump', on => input.jump = on); hold('slide', on => input.slide = on);
 addEventListener('touchstart', e => {
   for (const t of e.changedTouches) if (lookId === null && !t.target.closest('#joy,.btn,#msg')) { lookId = t.identifier; lookX = t.clientX; lookY = t.clientY; }
 });

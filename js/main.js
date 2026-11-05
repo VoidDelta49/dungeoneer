@@ -5,9 +5,11 @@ import { World } from './ecs.js';
 import { renderer, scene, cam } from './render.js';
 import { input, playing, lock } from './input.js';
 import { createPlayer, playerPhysics, DT } from './systems/player.js';
-import { spawner, enemyAI, separation, enemyDeath } from './systems/enemies.js';
+import { spawner, enemyAI, separation, projectiles, enemyDeath, pickups } from './systems/enemies.js';
 import { combat } from './systems/combat.js';
 import { view } from './systems/view.js';
+import { fx } from './fx.js';
+import { vmScene, vmCam } from './gun.js';
 
 const msg = document.getElementById('msg');
 const world = new World();
@@ -17,11 +19,11 @@ const player = createPlayer(world);
 function death() {
   if (player.health.hp > 0) return;
   world.alive = false; input.touchPlaying = false; document.exitPointerLock();
-  msg.style.display = 'flex'; msg.innerHTML = `<h1>YOU DIED</h1><p>Kills: ${world.kills}</p><p>Click to restart</p>`;
+  msg.style.display = 'flex'; msg.innerHTML = `<h1>YOU DIED</h1><p>Kills: ${world.kills} · Survived ${world.time | 0}s</p><p>Click to restart</p>`;
 }
 
 const fixed = [playerPhysics];                                     // 50Hz, while playing
-const update = [spawner, enemyAI, separation, combat, enemyDeath, death]; // every frame, while playing
+const update = [spawner, enemyAI, separation, combat, projectiles, enemyDeath, pickups, fx, death]; // every frame, while playing
 const present = [view];                                            // every frame, always
 
 msg.onclick = () => world.alive ? lock() : location.reload();
@@ -37,5 +39,6 @@ renderer.setAnimationLoop(() => {
   }
   world.alpha = acc / DT;
   for (const s of present) s(world, dt);
-  renderer.render(scene, cam);
+  renderer.clear(); renderer.render(scene, cam);
+  renderer.clearDepth(); renderer.render(vmScene, vmCam); // gun on top
 });
