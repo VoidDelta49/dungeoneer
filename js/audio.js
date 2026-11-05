@@ -39,5 +39,9 @@ export const sfx = {
   buzz: play(t => { for (let k = 0; k < 6; k++) tone(t + k * .08, .05, .12, 'square', 85, 75); }),
   seal: play(t => { tone(t, .6, .3, 'sawtooth', 90, 40); noise(t, .5, .3, 'lowpass', 900, 150); }),
   clear: play(t => [523, 659, 784, 1046].forEach((f, k) => tone(t + k * .07, .25, .14, 'triangle', f))),
+  clang: play(t => { tone(t, .25, .2, 'triangle', 1900, 1700); noise(t, .08, .3, 'highpass', 4000, 2500); }),
+  parry: play(t => { tone(t, .5, .25, 'sine', 2600, 2400); tone(t, .4, .15, 'triangle', 1300, 1290); noise(t, .1, .3, 'highpass', 6000, 3000); }),
+  warn: play(t => tone(t, .18, .12, 'square', 520, 780)),
+  laser: play(t => { tone(t, .35, .3, 'sawtooth', 1800, 200); noise(t, .2, .3, 'bandpass', 3000, 800); }),
   pickup: play(t => [660, 880, 1320].forEach((f, k) => tone(t + k * .06, .12, .15, 'triangle', f))),
 };

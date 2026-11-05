@@ -7,6 +7,7 @@ import { input, playing, lock, isTouch, releaseTouches } from './input.js';
 import { createPlayer, resetPlayer, playerPhysics, DT } from './systems/player.js';
 import { enemyAI, separation, projectiles, enemyDeath, pickups } from './systems/enemies.js';
 import { combat } from './systems/combat.js';
+import { melee } from './systems/melee.js';
 import { roomSystem, loadFloor, run } from './systems/rooms.js';
 import { view } from './systems/view.js';
 import { phoneSystem, resetPhone } from './phone.js';
@@ -25,8 +26,8 @@ function newRun() {
   resetPlayer(player, lv); resetPhone(); loadFloor(world, 1);
 }
 const CONTROLS = isTouch
-  ? 'Left side: stick (anywhere) · Right side: drag to aim — also while holding FIRE / JUMP / SLIDE / RELOAD<br>AUTO fires when the crosshair is on an enemy · Tap a hologram card to pick an upgrade'
-  : 'WASD move · Mouse look · Hold click to shoot · R reload<br>SPACE jump (hold to bhop) · CTRL / C / SHIFT slide · 1 / 2 / 3 pick upgrade';
+  ? 'Left side: stick (anywhere) · Right side: drag to aim — also while holding any button<br>AUTO fires / slashes when on target · SWORD swaps · RELOAD becomes BLOCK with the sword · THROW, then walk over it to pick it up'
+  : 'WASD move · Mouse look · Hold click to shoot · R reload<br>SPACE jump (hold to bhop) · CTRL / C / SHIFT slide · 1 / 2 / 3 pick upgrade<br>Q / wheel swap sword · Click combo · Right-click block (parry: block just before a hit) · E throw — go pick it up within 20s!';
 let menuKind = 'start', earned = 0;
 function menu(kind) {
   menuKind = kind;
@@ -52,7 +53,7 @@ msg.onclick = e => {
 };
 
 const fixed = [playerPhysics];                                     // 50Hz, while playing
-const update = [roomSystem, enemyAI, separation, combat, projectiles, enemyDeath, pickups, phoneSystem, fx, death]; // every frame, while playing
+const update = [roomSystem, enemyAI, separation, melee, combat, projectiles, enemyDeath, pickups, phoneSystem, fx, death]; // every frame, while playing
 const present = [view];                                            // every frame, always
 
 const clock = new THREE.Clock();

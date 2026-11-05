@@ -14,12 +14,31 @@ export const DT = 0.02; // fixed 50Hz physics tick
 
 export const createPlayer = world => world.add({ player: {}, pos: new THREE.Vector3(), prev: new THREE.Vector3(), vel: new THREE.Vector3(), health: {}, weapon: {}, stats: {}, picks: {} });
 export function resetPlayer(e, lv) { // fresh run; lv = meta shop levels
-  Object.assign(e.player, { grounded: false, gTimer: 0, readyJump: true, jumpCd: 0, crouch: false, eye: 1.6, dip: 0, air: 0, jumpWas: false });
+  Object.assign(e.player, { grounded: false, gTimer: 0, readyJump: true, jumpCd: 0, crouch: false, eye: 1.6, dip: 0, air: 0, jumpWas: false, block: -1, iframes: 0, swUsed: false });
   e.health.max = e.health.hp = 100 + 15 * lv('hp');
-  Object.assign(e.stats, { dmg: 1 + .1 * lv('dmg'), rate: 1, mag: WEAPON.MAG + 3 * lv('mag'), reload: 1, speed: 1, airJumps: 0, leech: 0, pierce: 0, pellets: 1, slideLoad: 0, momentum: 0, explode: 0 });
+  Object.assign(e.stats, { dmg: 1 + .1 * lv('dmg'), rate: 1, mag: WEAPON.MAG + 3 * lv('mag'), reload: 1, speed: 1, airJumps: 0, leech: 0, pierce: 0, pellets: 1, slideLoad: 0, momentum: 0, explode: 0, secondWind: 0,
+    sdmg: 1 + .1 * lv('dmg'), sspeed: 1, reach: 3, throwDmg: 1, parry: .2, parryHeal: 0, block: .75, recall: 0, finisher: 0 });
+  e.sword = { has: true, equipped: false, thrown: false, raise: 0, swing: -1, t: 0, next: 0, window: 0, queued: false, hit: false, status: '' };
   Object.assign(e.weapon, { mag: e.stats.mag, cd: 0, reload: -1, bloom: 0, last: -1, fill: 0 });
   for (const k in e.picks) delete e.picks[k];
   e.vel.set(0, 0, 0);
+}
+
+// All damage to the player goes through here: frontal block (and an early-raise parry) + Second Wind.
+// sx, sz = where the attack comes from. Returns 'parry' | 'block' | 'hit' | 'none'.
+export function hurt(world, dmg, sx, sz) {
+  const e = world.one('player'), pl = e.player, s = e.stats, hp = e.health;
+  if (pl.iframes > 0) return 'none';
+  let res = 'hit';
+  if (pl.block >= 0) {
+    const dx = sx - e.pos.x, dz = sz - e.pos.z, d = Math.hypot(dx, dz) || 1, yaw = input.look.yaw;
+    if (d < .6 || (-Math.sin(yaw) * dx - Math.cos(yaw) * dz) / d > .3) { // (on top of you counts as in front) // within ~72deg of where you're facing
+      if (pl.block < s.parry) { hp.hp = Math.min(hp.max, hp.hp + s.parryHeal); sfx.parry(); burst(e.pos.clone().setY(e.pos.y + 1.4).addScaledVector(new THREE.Vector3(dx / d, 0, dz / d), .8), 0xffffff, 24, 8, .3, 0); return 'parry'; }
+      dmg *= 1 - s.block; sfx.clang(); res = 'block';
+    }
+  }
+  if (hp.hp - dmg <= 0 && s.secondWind && !pl.swUsed) { pl.swUsed = true; pl.iframes = 1; hp.hp = 1; sfx.parry(); return res; }
+  hp.hp -= dmg; return res;
 }
 
 const footTiles = (x, z, f) => { // run f(i,j) over tiles under the player's footprint
@@ -30,8 +49,8 @@ const blockedAt = (x, y, z) => { let b = false; footTiles(x, z, (i, j) => { if (
 
 export function playerPhysics(world, dt) {
   for (const e of world.query('player')) {
-    const pl = e.player, v = e.vel, p = e.pos, keys = input.keys, yaw = input.look.yaw, MOVE = BASE_MOVE * e.stats.speed, MAXSPEED = BASE_MAX * e.stats.speed;
-    e.prev.copy(p);
+    const pl = e.player, v = e.vel, p = e.pos, keys = input.keys, yaw = input.look.yaw, MOVE = BASE_MOVE * e.stats.speed * (pl.block >= 0 ? .6 : 1), MAXSPEED = BASE_MAX * e.stats.speed;
+    e.prev.copy(p); pl.iframes -= dt;
     const fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw);
     let x = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0) + input.stick.x;
     let y = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0) - input.stick.y;

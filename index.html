@@ -26,6 +26,8 @@
   .btn{border-radius:50%;color:#fff;font:bold 14px monospace;border:2px solid #fff8;background:#fff3}
   .btn.held{filter:brightness(1.8);transform:scale(.94)}
   #auto{right:24px;bottom:236px;width:84px;height:36px;border-radius:18px;font-size:11px;opacity:.6}
+  #swap{right:225px;bottom:40px;width:60px;height:60px;font-size:11px;background:#4ff0ff33}
+  #throw{right:200px;bottom:150px;width:60px;height:60px;font-size:11px;background:#4ff0ff33}
   #auto.on{background:#f336;border-color:#f66;opacity:1}
   #banner{position:fixed;left:50%;top:22%;transform:translateX(-50%);text-align:center;opacity:0;pointer-events:none;text-shadow:0 0 8px #000}
   #banner b{display:block;font-size:34px;letter-spacing:4px}#banner small{font-size:15px;opacity:.85}
@@ -51,14 +53,14 @@
 <svg id="hitm" viewBox="-20 -20 40 40"><path d="M-12-12L-5-5M12-12L5-5M-12 12L-5 5M12 12L5 5"/></svg>
 <div id="hud"></div><div id="hpbar"><div id="hpfill"></div></div><div id="ammo"></div><div id="flash"></div><div id="banner"></div>
 <div id="joy"><div id="knob"></div></div>
-<button class="btn" id="fire">FIRE</button><button class="btn" id="jump">JUMP</button><button class="btn" id="slide">SLIDE</button><button class="btn" id="reload">RELOAD</button><button class="btn" id="auto">AUTO</button>
+<button class="btn" id="fire">FIRE</button><button class="btn" id="jump">JUMP</button><button class="btn" id="slide">SLIDE</button><button class="btn" id="reload">RELOAD</button><button class="btn" id="auto">AUTO</button><button class="btn" id="swap">SWORD</button><button class="btn" id="throw">THROW</button>
 <div id="msg"></div>
 <script>
 // ---- Cache busting: bump VERSION on every release. On load we refetch this page uncached;
 // if the live copy has a different VERSION, reload with a fresh ?v= so stale copies never linger.
 // Every module URL gets ?v=VERSION via the import map below — add new files to MODULES.
-const VERSION = '2026-11-05.2';
-const MODULES = ['main', 'ecs', 'level', 'render', 'input', 'audio', 'nav', 'fx', 'gun', 'systems/player', 'systems/enemies', 'systems/combat', 'systems/view', 'systems/rooms', 'phone', 'upgrades', 'meta'];
+const VERSION = '2026-11-05.3';
+const MODULES = ['main', 'ecs', 'level', 'render', 'input', 'audio', 'nav', 'fx', 'gun', 'systems/player', 'systems/enemies', 'systems/combat', 'systems/view', 'systems/rooms', 'phone', 'upgrades', 'meta', 'sword', 'systems/melee'];
 fetch(location.pathname + '?_=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => {
   const live = (t.match(/const VERSION = '([^']+)'/) || [])[1];
   if (live && live !== VERSION) { const u = new URL(location.href); u.searchParams.set('v', live); location.replace(u); }

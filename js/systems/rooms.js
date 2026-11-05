@@ -6,6 +6,7 @@ import { scene, buildLevel } from '../render.js';
 import { generate, rooms, start, barrier, doorTiles, roomCenter, W, T, WALL } from '../level.js';
 import { refreshNav } from '../nav.js';
 import { createEnemy, removeEnt } from './enemies.js';
+import { lose } from './melee.js';
 import { queueOffer } from '../phone.js';
 import { burst } from '../fx.js';
 import { sfx } from '../audio.js';
@@ -25,6 +26,9 @@ let props = []; // per-floor meshes
 const prop = (m, x, y, z) => { m.position.set(x, y, z); scene.add(m); props.push(m); return m; };
 
 export function loadFloor(world, floor) {
+  const pl = world.one('player'), lostSword = pl.sword.thrown; // leaving a thrown sword behind loses it
+  if (lostSword) lose(world, pl);
+  pl.player.swUsed = false;
   for (const e of [...world.ents]) if (!e.player && e.mesh) removeEnt(world, e);
   for (const m of props) scene.remove(m); props = [];
   generate(floor); buildLevel(); refreshNav();
@@ -32,12 +36,12 @@ export function loadFloor(world, floor) {
   const c0 = roomCenter(rooms[0]), cs = rooms.map(roomCenter), exit = cs.reduce((b, c, k) => c.distanceTo(c0) > cs[b].distanceTo(c0) ? k : b, 1);
   run.states = rooms.map((rm, k) => {
     const st = { k, c: cs[k], cleared: !k, exit: k === exit, spawned: 0, timer: 0, seals: [],
-      budget: Math.round((4 + rm.w * rm.h / 70 + floor * 2.5) * (k === exit ? .6 : 1)) };
+      theme: theme(floor), budget: Math.round((4 + rm.w * rm.h / 70 + floor * 2.5) * (k === exit ? .6 : 1)) };
     if (k) { st.rift = prop(new THREE.Mesh(riftGeo, new THREE.MeshBasicMaterial({ color: st.exit ? 0xff3322 : 0xaa00ff })), cs[k].x, .05, cs[k].z); st.rift.rotation.x = -Math.PI / 2; }
     return st;
   });
-  const p = world.one('player'); p.pos.copy(start); p.prev.copy(start); p.vel.set(0, 0, 0);
-  banner(`FLOOR ${floor}`, 'Clear rooms for upgrades · the red rift guards the lift', '#4ff0ff');
+  const p = pl; p.pos.copy(start); p.prev.copy(start); p.vel.set(0, 0, 0);
+  banner(`FLOOR ${floor}`, lostSword ? 'You left your sword behind — it is gone' : 'Clear rooms for upgrades · the red rift guards the lift', '#4ff0ff');
 }
 
 function seal(st, on) {
@@ -49,7 +53,13 @@ function seal(st, on) {
   refreshNav();
 }
 
-const KINDS = f => { const r = Math.random(); return r < Math.min(.3, .06 + f * .06) ? 'spitter' : r < Math.min(.65, .2 + f * .12) ? 'runner' : 'grunt'; };
+// Each room has a theme that heavily favours one enemy type, so rooms play differently. [weight, from floor]
+const POOL = { grunt: [10, 1], runner: [5, 1], spitter: [3, 1], leaper: [3, 1], brute: [1.5, 1], lancer: [1.5, 2] };
+const THEMES = { grunt: 'HORDE', runner: 'STAMPEDE', spitter: 'SPITTER NEST', leaper: 'LEAPER PIT', brute: 'BRUTE PEN', lancer: 'LANCER WATCH' };
+const pickW = w => { let r = Math.random() * Object.values(w).reduce((a, b) => a + b, 0); for (const k in w) if ((r -= w[k]) < 0) return k; return 'grunt'; };
+const avail = f => Object.fromEntries(Object.entries(POOL).filter(([, [, m]]) => m <= f).map(([k, [w]]) => [k, w]));
+const theme = f => pickW(Object.fromEntries(Object.keys(avail(f)).map(k => [k, 1])));
+const KINDS = (f, th) => { const w = avail(f); w[th] += 8; return pickW(w); };
 export function roomSystem(world, dt) {
   const pl = world.one('player'), p = pl.pos, i = Math.floor(p.z / T), j = Math.floor(p.x / T), f = run.floor;
   for (const st of run.states) if (st.rift) st.rift.rotation.z += dt * (st === run.active ? 6 : 1);
@@ -63,13 +73,13 @@ export function roomSystem(world, dt) {
       if (!s.cleared && j > rm.x && j < rm.x + rm.w - 1 && i > rm.y && i < rm.y + rm.h - 1) { // walked in: lock down
         run.active = s; seal(s, 1); sfx.seal();
         if (s.exit) createEnemy(world, s.c, 'warden', s.k, f);
-        banner(s.exit ? 'WARDEN' : 'ROOM SEALED', `${s.budget + (s.exit ? 1 : 0)} hostiles`, '#ff4466');
+        banner(s.exit ? 'WARDEN' : THEMES[s.theme], `Room sealed · ${s.budget + (s.exit ? 1 : 0)} hostiles`, '#ff4466');
       }
     }
     return;
   }
   let alive = 0; for (const e of world.query('enemy')) if (e.enemy.room === st.k) alive++;
-  if (st.spawned < st.budget && alive < 4 + f && (st.timer -= dt) <= 0) { st.timer = .55; st.spawned++; createEnemy(world, st.c, KINDS(f), st.k, f); }
+  if (st.spawned < st.budget && alive < 4 + f && (st.timer -= dt) <= 0) { st.timer = .55; st.spawned++; createEnemy(world, st.c, KINDS(f, st.theme), st.k, f); }
   if (st.spawned < st.budget || alive) return;
   // cleared
   st.cleared = true; run.active = null; run.cleared++; run.cores += st.exit ? 4 : 1;

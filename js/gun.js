@@ -51,7 +51,7 @@ export const catchGun = () => { st.kickV -= 5; st.pulse = 1; };
 
 const cl = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v)), ease = x => x * x * (3 - 2 * x);
 const inOut = x => x < .5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
-// o: { speed, grounded, crouch, vy, dip, yaw, pitch, time, ammo (0..1), reload (-1 | 0..1), locked }
+// o: { hide (0..1, sword out), speed, grounded, crouch, vy, dip, yaw, pitch, time, ammo (0..1), reload (-1 | 0..1), locked }
 export function animateGun(dt, o) {
   dt = Math.min(dt, .05);
   for (let n = 0; n < 2; n++) { const h = dt / 2; // springs
@@ -77,7 +77,7 @@ export function animateGun(dt, o) {
     magY = p < .14 ? -ease(p / .14) * .05 : p < .74 ? -.05 : -.05 * (1 - cl((p - .74) / .06));
     magVis = p < .14 || p > .74; lit = Math.floor(cl((p - .18) / .55) * 6);
   }
-  root.position.set(px, py, pz); root.rotation.set(rx, ry, rz); pivot.rotation.x = spin;
+  root.position.set(px, py - o.hide * .4, pz); root.rotation.set(rx - o.hide * .8, ry, rz); root.visible = o.hide < .98; pivot.rotation.x = spin;
   mag.position.y = magY; mag.visible = magVis;
   slide.position.z = o.locked ? .045 : st.slide * .045; st.slide *= Math.exp(-dt * 28);
   cells.forEach((c, i) => c.material = (i >> 1) < lit ? cellOn : cellOff);

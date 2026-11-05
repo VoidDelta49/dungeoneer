@@ -61,6 +61,7 @@ function shoot(world, pl) {
 
 export function combat(world, dt) {
   const pl = world.one('player'), w = pl.weapon, s = pl.stats;
+  if (pl.sword.raise > .05) return; // sword out (melee.js handles input)
   let want = input.fireHeld || input.firePressed;
   input.firePressed = false;
   if (!want && isTouch && input.autoFire && w.mag > 0) { // generous target check (1.3x hitbox) so tracking is forgiving

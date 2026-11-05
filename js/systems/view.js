@@ -2,11 +2,12 @@
 import { cam, sun, muzzle } from '../render.js';
 import { input, playing } from '../input.js';
 import { feel, animateGun } from '../gun.js';
+import { animateSword, SWINGS } from '../sword.js';
 import { run } from './rooms.js';
 import { sfx } from '../audio.js';
 
 const $ = id => document.getElementById(id);
-const hud = $('hud'), flash = $('flash'), hpfill = $('hpfill'), ammo = $('ammo'), cross = $('cross'), hitm = $('hitm');
+const fireBtn = $('fire'), reloadBtn = $('reload'), swapBtn = $('swap'), throwBtn = $('throw'), hud = $('hud'), flash = $('flash'), hpfill = $('hpfill'), ammo = $('ammo'), cross = $('cross'), hitm = $('hitm');
 let lastHp = Infinity, hurtT = 0, hitT = 0;
 
 export function view(world, dt) {
@@ -26,7 +27,9 @@ export function view(world, dt) {
   muzzle.intensity *= Math.pow(.8, dt * 60);
   const sx = Math.round(e.pos.x / 4) * 4, sz = Math.round(e.pos.z / 4) * 4;
   sun.position.set(sx + 50, 90, sz + 32); sun.target.position.set(sx, 0, sz);
-  animateGun(dt, { speed, grounded: pl.grounded, crouch: pl.crouch, vy: v.y, dip: pl.dip, yaw: input.look.yaw, pitch: input.look.pitch,
+  const sw = e.sword;
+  animateSword(dt, { raise: sw.raise, swing: sw.swing, p: sw.swing >= 0 ? sw.t / SWINGS[sw.swing].dur : 0, block: pl.block >= 0, time: world.time, speed });
+  animateGun(dt, { hide: sw.raise, speed, grounded: pl.grounded, crouch: pl.crouch, vy: v.y, dip: pl.dip, yaw: input.look.yaw, pitch: input.look.pitch,
     time: world.time, ammo: w.mag / e.stats.mag, reload: w.reload, locked: w.mag === 0 && (w.reload < 0 || w.reload < .8) });
 
   const hp = e.health.hp; hurtT -= dt;
@@ -36,8 +39,12 @@ export function view(world, dt) {
   hpfill.style.width = Math.max(0, hp) / e.health.max * 100 + '%';
   let boss = ''; for (const b of world.query('enemy')) if (b.enemy.ty.boss) boss = `   WARDEN ${Math.ceil(b.health.hp / b.health.max * 100)}%`;
   hud.textContent = `HP ${Math.max(0, hp | 0)}/${e.health.max}   FLOOR ${run.floor}   ◆${run.cores}   KILLS ${world.kills}${boss}`;
-  ammo.innerHTML = w.reload >= 0 ? '<small>RELOADING</small>' : `${w.mag}<small> / ∞</small>`;
-  ammo.classList.toggle('low', w.mag <= 4);
+  ammo.innerHTML = sw.equipped ? '<small>SWORD</small>' : w.reload >= 0 ? '<small>RELOADING</small>' : `${w.mag}<small> / ∞</small>`;
+  ammo.classList.toggle('low', !sw.equipped && w.mag <= 4);
+  if (sw.status) hud.textContent += '   ' + sw.status;
+  fireBtn.textContent = sw.equipped ? 'SLASH' : 'FIRE'; reloadBtn.textContent = sw.equipped ? 'BLOCK' : 'RELOAD';
+  swapBtn.textContent = sw.equipped ? 'GUN' : 'SWORD'; swapBtn.style.opacity = sw.has && !sw.thrown ? 1 : .3;
+  throwBtn.textContent = sw.thrown ? 'RECALL' : 'THROW'; throwBtn.style.opacity = sw.equipped || (sw.thrown && e.stats.recall) ? 1 : .3;
   cross.style.setProperty('--g', 5 + w.bloom * 400 + speed * .15 + 'px');
   if (world.hitMarker) { hitT = 1; hitm.style.stroke = world.hitMarker > 1 ? '#f33' : '#fff'; world.hitMarker = 0; }
   hitT = Math.max(0, hitT - dt * 5); hitm.style.opacity = hitT; hitm.style.transform = `scale(${1.3 - hitT * .3})`;
